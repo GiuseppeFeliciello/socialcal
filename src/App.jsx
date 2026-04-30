@@ -1,629 +1,471 @@
+import { useState, useEffect, useRef } from "react";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+const G = `
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:#f8f7f4; --surface:#ffffff; --surface2:#f1f0ec; --border:#e8e6e0; --border2:#d4d0c8;
+    --text:#1a1814; --text2:#6b6760; --text3:#9b9891;
+    --accent:#2d6a4f; --accent2:#40916c; --accentbg:#d8f3dc;
+    --danger:#c1121f; --dangerbg:#ffe5e5; --warn:#e07c24; --warnbg:#fff3e0;
+    --shadow:0 1px 3px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.06);
+    --shadow2:0 2px 8px rgba(0,0,0,.08),0 8px 32px rgba(0,0,0,.08);
+    --radius:12px; --radius2:8px; --font:'Outfit',system-ui,sans-serif;
+    --transition:all .18s cubic-bezier(.4,0,.2,1);
+  }
+  body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;}
+  input,select,textarea,button{font-family:var(--font);}
+  ::-webkit-scrollbar{width:6px;height:6px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px;}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 18px;border-radius:var(--radius2);border:none;cursor:pointer;font-size:13.5px;font-weight:600;font-family:var(--font);transition:var(--transition);user-select:none;white-space:nowrap;}
+  .btn:active{transform:scale(.97);}
+  .btn-primary{background:var(--accent);color:#fff;}
+  .btn-primary:hover{background:var(--accent2);box-shadow:0 4px 12px rgba(45,106,79,.3);transform:translateY(-1px);}
+  .btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+  .btn-ghost{background:transparent;color:var(--text2);border:1.5px solid var(--border);}
+  .btn-ghost:hover{background:var(--surface2);border-color:var(--border2);color:var(--text);}
+  .btn-danger{background:var(--dangerbg);color:var(--danger);border:1.5px solid #ffc5c5;}
+  .btn-danger:hover{background:var(--danger);color:#fff;}
+  .btn-sm{padding:6px 12px;font-size:12px;border-radius:7px;}
+  .btn-icon{padding:7px;border-radius:8px;width:32px;height:32px;}
+  .input{width:100%;padding:10px 13px;border-radius:var(--radius2);background:var(--surface);border:1.5px solid var(--border);color:var(--text);font-size:14px;font-family:var(--font);transition:var(--transition);outline:none;}
+  .input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(45,106,79,.12);}
+  .input::placeholder{color:var(--text3);}
+  .card{background:var(--surface);border-radius:var(--radius);border:1.5px solid var(--border);box-shadow:var(--shadow);}
+  .nav-item{display:flex;align-items:center;gap:10px;width:100%;padding:9px 16px;border:none;cursor:pointer;font-size:13.5px;font-weight:500;font-family:var(--font);border-radius:var(--radius2);transition:var(--transition);background:transparent;color:var(--text2);text-align:left;}
+  .nav-item:hover{background:var(--surface2);color:var(--text);}
+  .nav-item.active{background:var(--accentbg);color:var(--accent);font-weight:600;}
+  .stat-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:20px 22px;cursor:pointer;transition:var(--transition);box-shadow:var(--shadow);}
+  .stat-card:hover{transform:translateY(-2px);box-shadow:var(--shadow2);border-color:var(--border2);}
+  .stat-card.active{border-color:var(--accent);box-shadow:0 0 0 3px rgba(45,106,79,.1);}
+  .post-row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:var(--radius2);background:var(--surface);border:1.5px solid var(--border);transition:var(--transition);cursor:pointer;}
+  .post-row:hover{border-color:var(--border2);box-shadow:var(--shadow);transform:translateX(2px);}
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);backdrop-filter:blur(4px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;}
+  .modal{background:var(--surface);border-radius:16px;border:1.5px solid var(--border);box-shadow:var(--shadow2);width:100%;max-width:580px;max-height:90vh;overflow-y:auto;animation:slideUp .22s cubic-bezier(.4,0,.2,1);}
+  @keyframes slideUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
+  .cal-cell{background:var(--surface);min-height:96px;padding:6px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;}
+  .cal-cell:hover{background:var(--surface2);}
+  .cal-cell.today{background:#f0faf4;}
+  .cal-tag{font-size:10.5px;padding:2px 6px;border-radius:5px;margin-bottom:2px;cursor:pointer;transition:var(--transition);display:flex;align-items:center;gap:3px;white-space:nowrap;overflow:hidden;}
+  .cal-tag:hover{filter:brightness(.92);transform:scale(1.02);}
+  .tooltip{position:fixed;z-index:9999;pointer-events:none;background:var(--text);color:#fff;border-radius:10px;padding:10px 14px;font-size:12.5px;max-width:240px;box-shadow:0 8px 32px rgba(0,0,0,.2);animation:fadeIn .12s ease;}
+  @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+  .pill-tabs{display:flex;background:var(--surface2);border-radius:9px;padding:3px;gap:2px;border:1.5px solid var(--border);}
+  .pill-tab{padding:6px 16px;border-radius:7px;border:none;cursor:pointer;font-size:13px;font-weight:500;font-family:var(--font);transition:var(--transition);background:transparent;color:var(--text2);}
+  .pill-tab.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow);font-weight:600;}
+  .pill-tab:hover:not(.active){color:var(--text);}
+  .chip{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:99px;font-size:11.5px;font-weight:600;border:1.5px solid transparent;}
+  .label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;display:block;letter-spacing:.02em;}
+  .field{display:flex;flex-direction:column;}
+  .empty-state{text-align:center;padding:48px 20px;color:var(--text3);}
+  .empty-state .icon{font-size:40px;margin-bottom:12px;}
+  .empty-state p{font-size:14px;}
+  .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px;}
+  .page-title{font-size:22px;font-weight:700;color:var(--text);}
+`;
 
-// ─── CONSTANTS ────────────────────────────────────────────────────────────────
-const PLATFORMS = ["Instagram", "Facebook", "TikTok", "Tutte"];
-const POST_STATUSES = ["Bozza", "In Revisione", "Da Editare", "Pronto", "Programmato", "Pubblicato"];
+const PLATFORMS = ["Instagram","Facebook","TikTok","Tutte"];
+const POST_STATUSES = ["Bozza","In Revisione","Da Editare","Pronto","Programmato","Pubblicato"];
 const STATUS_COLORS = {
-  "Bozza":        { bg: "#64748b", light: "#e2e8f0", text: "#1e293b", label: "Bozza" },
-  "In Revisione": { bg: "#f59e0b", light: "#fef3c7", text: "#78350f", label: "In Revisione" },
-  "Da Editare":   { bg: "#ef4444", light: "#fee2e2", text: "#7f1d1d", label: "Da Editare" },
-  "Pronto":       { bg: "#10b981", light: "#d1fae5", text: "#064e3b", label: "Pronto" },
-  "Programmato":  { bg: "#6366f1", light: "#e0e7ff", text: "#312e81", label: "Programmato" },
-  "Pubblicato":   { bg: "#0ea5e9", light: "#e0f2fe", text: "#0c4a6e", label: "Pubblicato" },
+  "Bozza":        {bg:"#94a3b8",light:"#f1f5f9",text:"#475569"},
+  "In Revisione": {bg:"#f59e0b",light:"#fffbeb",text:"#92400e"},
+  "Da Editare":   {bg:"#ef4444",light:"#fef2f2",text:"#991b1b"},
+  "Pronto":       {bg:"#22c55e",light:"#f0fdf4",text:"#166534"},
+  "Programmato":  {bg:"#6366f1",light:"#eef2ff",text:"#3730a3"},
+  "Pubblicato":   {bg:"#0ea5e9",light:"#f0f9ff",text:"#075985"},
 };
+const PALETTE=["#e74c3c","#e91e63","#9c27b0","#673ab7","#3f51b5","#2196f3","#03a9f4","#00bcd4","#009688","#4caf50","#8bc34a","#cddc39","#ffeb3b","#ffc107","#ff9800","#ff5722","#795548","#607d8b","#f06292","#ba68c8","#81d4fa","#80cbc4","#a5d6a7","#ffcc02","#ff7043","#26c6da","#66bb6a","#ab47bc","#5c6bc0","#ec407a"];
+const DAYS_IT=["Dom","Lun","Mar","Mer","Gio","Ven","Sab"];
+const MONTHS_IT=["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
+const PICONS={"Instagram":"📸","Facebook":"👤","TikTok":"🎵","Tutte":"🌐"};
 
-const PALETTE = [
-  "#e74c3c","#e91e63","#9c27b0","#673ab7","#3f51b5","#2196f3",
-  "#03a9f4","#00bcd4","#009688","#4caf50","#8bc34a","#cddc39",
-  "#ffeb3b","#ffc107","#ff9800","#ff5722","#795548","#607d8b",
-  "#f06292","#ba68c8","#81d4fa","#80cbc4","#a5d6a7","#ffcc02",
-  "#ff7043","#26c6da","#66bb6a","#ab47bc","#5c6bc0","#ec407a",
-];
+function genId(){return"id_"+Math.random().toString(36).slice(2,9);}
+function fmtDate(d){if(!d)return"";const dt=typeof d==="string"?new Date(d+"T00:00:00"):d;return`${String(dt.getDate()).padStart(2,"0")}/${String(dt.getMonth()+1).padStart(2,"0")}/${dt.getFullYear()}`;}
+function isoDate(y,m,d){return`${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;}
+function today(){const n=new Date();return isoDate(n.getFullYear(),n.getMonth(),n.getDate());}
+function useLS(key,init){const[v,setV]=useState(()=>{try{const s=localStorage.getItem(key);return s?JSON.parse(s):init;}catch{return init;}});useEffect(()=>{try{localStorage.setItem(key,JSON.stringify(v));}catch{}},[key,v]);return[v,setV];}
 
-const DAYS_IT = ["Dom","Lun","Mar","Mer","Gio","Ven","Sab"];
-const MONTHS_IT = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
-
-const initialAdmin = {
-  id: "u1", name: "Admin", email: "admin@example.com",
-  role: "admin", avatar: "A", password: "admin123",
-};
-
-function genId() { return "id_" + Math.random().toString(36).slice(2, 9); }
-
-// ─── STORAGE ──────────────────────────────────────────────────────────────────
-function useLocalState(key, init) {
-  const [val, setVal] = useState(() => {
-    try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : init; }
-    catch { return init; }
-  });
-  useEffect(() => { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }, [key, val]);
-  return [val, setVal];
-}
-
-// ─── UTILS ────────────────────────────────────────────────────────────────────
-function fmtDate(d) {
-  if (!d) return "";
-  const dt = typeof d === "string" ? new Date(d) : d;
-  return `${String(dt.getDate()).padStart(2,"0")}/${String(dt.getMonth()+1).padStart(2,"0")}/${dt.getFullYear()}`;
-}
-function isoDate(y,m,d) { return `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`; }
-function today() { const n=new Date(); return isoDate(n.getFullYear(),n.getMonth(),n.getDate()); }
-
-// ─── MAIN APP ─────────────────────────────────────────────────────────────────
-export default function App() {
-  const [users, setUsers] = useLocalState("scm_users", [initialAdmin]);
-  const [clients, setClients] = useLocalState("scm_clients", []);
-  const [posts, setPosts] = useLocalState("scm_posts", []);
-  const [currentUser, setCurrentUser] = useLocalState("scm_current", null);
-  const [section, setSection] = useState("dashboard");
-  const [labels, setLabels] = useLocalState("scm_labels", {});
-  const [memory, setMemory] = useLocalState("scm_memory", { captions: [], hashtags: [], firstComments: [] });
-
-  // Auth
-  const [loginEmail, setLoginEmail] = useState("");
-  const [loginPw, setLoginPw] = useState("");
-  const [loginErr, setLoginErr] = useState("");
-
-  const user = users.find(u => u.id === currentUser);
-  const isAdmin = user?.role === "admin";
-
-  function login() {
-    const u = users.find(u => u.email === loginEmail && u.password === loginPw);
-    if (u) { setCurrentUser(u.id); setLoginErr(""); }
-    else setLoginErr("Credenziali non valide");
-  }
-  function logout() { setCurrentUser(null); setSection("dashboard"); }
-
-  function lbl(key, fallback) { return labels[key] ?? fallback; }
-  function setLbl(key, val) { setLabels(l => ({ ...l, [key]: val })); }
-
-  function addMemory(type, val) {
-    if (!val) return;
-    setMemory(m => ({ ...m, [type]: [...new Set([val, ...(m[type]||[])])].slice(0,30) }));
-  }
-
-  if (!user) return (
-    <Login email={loginEmail} setEmail={setLoginEmail} pw={loginPw} setPw={setLoginPw} err={loginErr} onLogin={login} />
-  );
-
-  // Section nav
-  const nav = [
-    { id: "dashboard", icon: "⊞", label: lbl("nav_dashboard","Dashboard") },
-    { id: "calendar",  icon: "📅", label: lbl("nav_calendar","Calendario") },
-    { id: "posts",     icon: "✏️", label: lbl("nav_posts","Post") },
-    { id: "clients",   icon: "👥", label: lbl("nav_clients","Clienti") },
-    ...(isAdmin ? [{ id: "settings", icon: "⚙️", label: lbl("nav_settings","Impostazioni") }] : []),
+export default function App(){
+  useEffect(()=>{const s=document.createElement("style");s.textContent=G;document.head.appendChild(s);return()=>document.head.removeChild(s);},[]);
+  const[users,setUsers]=useLS("scm_users",[]);
+  const[clients,setClients]=useLS("scm_clients",[]);
+  const[posts,setPosts]=useLS("scm_posts",[]);
+  const[currentUser,setCurrentUser]=useLS("scm_current",null);
+  const[labels,setLabels]=useLS("scm_labels",{});
+  const[memory,setMemory]=useLS("scm_memory",{captions:[],hashtags:[],firstComments:[]});
+  const[section,setSection]=useState("dashboard");
+  const user=users.find(u=>u.id===currentUser);
+  const isAdmin=user?.role==="admin";
+  function lbl(key,fb){return labels[key]??fb;}
+  function setLbl(key,val){setLabels(l=>({...l,[key]:val}));}
+  function addMemory(type,val){if(!val?.trim())return;setMemory(m=>({...m,[type]:[...new Set([val,...(m[type]||[])])].slice(0,30)}));}
+  if(users.length===0)return <SetupAdmin onDone={u=>{setUsers([u]);setCurrentUser(u.id);}}/>;
+  if(!user)return <Login users={users} onLogin={id=>setCurrentUser(id)}/>;
+  const nav=[
+    {id:"dashboard",icon:"⊞",label:lbl("nav_dashboard","Dashboard")},
+    {id:"calendar",icon:"📅",label:lbl("nav_calendar","Calendario")},
+    {id:"posts",icon:"✏️",label:lbl("nav_posts","Post")},
+    {id:"clients",icon:"👥",label:lbl("nav_clients","Clienti")},
+    ...(isAdmin?[{id:"settings",icon:"⚙️",label:lbl("nav_settings","Impostazioni")}]:[]),
   ];
-
-  return (
-    <div style={{ display:"flex", height:"100vh", fontFamily:"'DM Sans',system-ui,sans-serif", background:"#0f172a", color:"#e2e8f0" }}>
-      {/* Sidebar */}
-      <aside style={{ width:220, background:"#1e293b", display:"flex", flexDirection:"column", padding:"20px 0", flexShrink:0 }}>
-        <div style={{ padding:"0 20px 20px", borderBottom:"1px solid #334155" }}>
-          <div style={{ fontSize:20, fontWeight:700, color:"#f1f5f9", letterSpacing:"-0.5px" }}>
-            {lbl("app_name","📣 SocialCal")}
+  return(
+    <div style={{display:"flex",height:"100vh",overflow:"hidden"}}>
+      <aside style={{width:220,flexShrink:0,background:"#fff",borderRight:"1.5px solid var(--border)",display:"flex",flexDirection:"column",overflowY:"auto"}}>
+        <div style={{padding:"22px 20px 16px",borderBottom:"1.5px solid var(--border)"}}>
+          <div style={{fontSize:18,fontWeight:700,color:"var(--text)",display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:22}}>📣</span>{lbl("app_name","SocialCal")}
           </div>
-          <div style={{ fontSize:11, color:"#64748b", marginTop:2 }}>Editorial Manager</div>
+          <div style={{fontSize:11,color:"var(--text3)",marginTop:2,fontWeight:500}}>Editorial Manager</div>
         </div>
-        <nav style={{ flex:1, padding:"12px 0" }}>
-          {nav.map(n => (
-            <button key={n.id} onClick={() => setSection(n.id)}
-              style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 20px",
-                background: section===n.id ? "#334155" : "transparent",
-                color: section===n.id ? "#f1f5f9" : "#94a3b8",
-                border:"none", cursor:"pointer", fontSize:14, fontWeight: section===n.id ? 600 : 400,
-                borderLeft: section===n.id ? "3px solid #6366f1" : "3px solid transparent",
-                textAlign:"left", transition:"all .15s" }}>
-              <span>{n.icon}</span>{n.label}
+        <nav style={{flex:1,padding:"12px 10px"}}>
+          {nav.map(n=>(
+            <button key={n.id} className={"nav-item"+(section===n.id?" active":"")} onClick={()=>setSection(n.id)}>
+              <span style={{fontSize:15}}>{n.icon}</span><span>{n.label}</span>
             </button>
           ))}
         </nav>
-        <div style={{ padding:"16px 20px", borderTop:"1px solid #334155" }}>
-          <div style={{ fontSize:13, color:"#94a3b8", marginBottom:8 }}>
-            <strong style={{ color:"#e2e8f0" }}>{user.name}</strong><br/>
-            <span style={{ fontSize:11 }}>{user.role === "admin" ? "Amministratore" : user.role === "editor" ? "Editor" : "Viewer"}</span>
+        <div style={{padding:"14px 16px",borderTop:"1.5px solid var(--border)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+            <div style={{width:32,height:32,borderRadius:"50%",background:"var(--accentbg)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,color:"var(--accent)",fontSize:13,flexShrink:0}}>{user.name?.[0]?.toUpperCase()}</div>
+            <div style={{minWidth:0}}>
+              <div style={{fontSize:13,fontWeight:600,color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{user.name}</div>
+              <div style={{fontSize:11,color:"var(--text3)"}}>{isAdmin?"Admin":user.role}</div>
+            </div>
           </div>
-          <button onClick={logout} style={{ fontSize:12, color:"#ef4444", background:"none", border:"none", cursor:"pointer", padding:0 }}>Esci</button>
+          <button className="btn btn-ghost btn-sm" style={{width:"100%",fontSize:12}} onClick={()=>setCurrentUser(null)}>Esci</button>
         </div>
       </aside>
-
-      {/* Main */}
-      <main style={{ flex:1, overflow:"auto", background:"#0f172a" }}>
-        {section === "dashboard" && <Dashboard posts={posts} clients={clients} setPosts={setPosts} setSection={setSection} lbl={lbl} />}
-        {section === "calendar"  && <CalendarView posts={posts} setPosts={setPosts} clients={clients} lbl={lbl} memory={memory} addMemory={addMemory} />}
-        {section === "posts"     && <PostsSection posts={posts} setPosts={setPosts} clients={clients} lbl={lbl} memory={memory} addMemory={addMemory} user={user} />}
-        {section === "clients"   && <ClientsSection clients={clients} setClients={setClients} posts={posts} lbl={lbl} setLbl={setLbl} />}
-        {section === "settings"  && isAdmin && <Settings users={users} setUsers={setUsers} lbl={lbl} setLbl={setLbl} currentUser={currentUser} />}
+      <main style={{flex:1,overflowY:"auto",background:"var(--bg)"}}>
+        {section==="dashboard"&&<Dashboard posts={posts} clients={clients} setPosts={setPosts} setSection={setSection} lbl={lbl}/>}
+        {section==="calendar"&&<CalendarView posts={posts} setPosts={setPosts} clients={clients} lbl={lbl} memory={memory} addMemory={addMemory}/>}
+        {section==="posts"&&<PostsSection posts={posts} setPosts={setPosts} clients={clients} lbl={lbl} memory={memory} addMemory={addMemory} user={user}/>}
+        {section==="clients"&&<ClientsSection clients={clients} setClients={setClients} posts={posts} lbl={lbl}/>}
+        {section==="settings"&&isAdmin&&<Settings users={users} setUsers={setUsers} lbl={lbl} setLbl={setLbl} currentUser={currentUser}/>}
       </main>
     </div>
   );
 }
 
-// ─── LOGIN ────────────────────────────────────────────────────────────────────
-function Login({ email, setEmail, pw, setPw, err, onLogin }) {
-  return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"#0f172a", fontFamily:"'DM Sans',system-ui,sans-serif" }}>
-      <div style={{ background:"#1e293b", padding:40, borderRadius:16, width:340, border:"1px solid #334155" }}>
-        <div style={{ fontSize:24, fontWeight:700, color:"#f1f5f9", marginBottom:4 }}>📣 SocialCal</div>
-        <div style={{ color:"#64748b", fontSize:13, marginBottom:28 }}>Accedi per continuare</div>
-        {err && <div style={{ background:"#7f1d1d", color:"#fca5a5", padding:"8px 12px", borderRadius:8, fontSize:13, marginBottom:16 }}>{err}</div>}
-        <input placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)}
-          style={{ width:"100%", padding:"10px 14px", borderRadius:8, background:"#0f172a", border:"1px solid #334155", color:"#e2e8f0", fontSize:14, boxSizing:"border-box", marginBottom:10 }} />
-        <input placeholder="Password" type="password" value={pw} onChange={e=>setPw(e.target.value)}
-          onKeyDown={e=>e.key==="Enter"&&onLogin()}
-          style={{ width:"100%", padding:"10px 14px", borderRadius:8, background:"#0f172a", border:"1px solid #334155", color:"#e2e8f0", fontSize:14, boxSizing:"border-box", marginBottom:20 }} />
-        <button onClick={onLogin} style={{ width:"100%", padding:"12px", borderRadius:8, background:"#6366f1", color:"#fff", border:"none", cursor:"pointer", fontSize:15, fontWeight:600 }}>Accedi</button>
-        <div style={{ marginTop:16, fontSize:12, color:"#475569", textAlign:"center" }}>Default: admin@example.com / admin123</div>
+function SetupAdmin({onDone}){
+  const[name,setName]=useState("");const[email,setEmail]=useState("");
+  const[pw,setPw]=useState("");const[pw2,setPw2]=useState("");const[err,setErr]=useState("");
+  function submit(){
+    if(!name||!email||!pw)return setErr("Compila tutti i campi");
+    if(pw!==pw2)return setErr("Le password non coincidono");
+    if(pw.length<6)return setErr("La password deve avere almeno 6 caratteri");
+    onDone({id:genId(),name,email,password:pw,role:"admin",avatar:name[0].toUpperCase()});
+  }
+  return(
+    <div style={{minHeight:"100vh",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{width:"100%",maxWidth:420}}>
+        <div style={{textAlign:"center",marginBottom:32}}>
+          <div style={{fontSize:48,marginBottom:12}}>📣</div>
+          <h1 style={{fontSize:26,fontWeight:700,color:"var(--text)"}}>Benvenuto in SocialCal</h1>
+          <p style={{color:"var(--text2)",fontSize:14,marginTop:8}}>Crea il tuo account amministratore per iniziare</p>
+        </div>
+        <div className="card" style={{padding:28}}>
+          <div style={{background:"var(--accentbg)",borderRadius:8,padding:"10px 14px",marginBottom:20,fontSize:13,color:"var(--accent)",fontWeight:500}}>
+            🔐 Questo sarà l'unico account con privilegi di amministratore
+          </div>
+          {err&&<div style={{background:"var(--dangerbg)",color:"var(--danger)",padding:"9px 13px",borderRadius:8,fontSize:13,marginBottom:16,fontWeight:500}}>{err}</div>}
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            <div className="field"><label className="label">Nome completo</label><input className="input" placeholder="es. Giuseppe Rossi" value={name} onChange={e=>setName(e.target.value)}/></div>
+            <div className="field"><label className="label">Email</label><input className="input" type="email" placeholder="tuaemail@esempio.com" value={email} onChange={e=>setEmail(e.target.value)}/></div>
+            <div className="field"><label className="label">Password</label><input className="input" type="password" placeholder="Minimo 6 caratteri" value={pw} onChange={e=>setPw(e.target.value)}/></div>
+            <div className="field"><label className="label">Conferma Password</label><input className="input" type="password" placeholder="Ripeti la password" value={pw2} onChange={e=>setPw2(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()}/></div>
+            <button className="btn btn-primary" style={{width:"100%",padding:"12px",marginTop:4,fontSize:15}} onClick={submit}>Crea Account e Inizia →</button>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-// ─── DASHBOARD ────────────────────────────────────────────────────────────────
-function Dashboard({ posts, clients, setPosts, setSection, lbl }) {
-  const now = new Date();
-  const thisMonth = posts.filter(p => p.date?.startsWith(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`));
-  const byStatus = s => posts.filter(p => p.status === s);
-  const upcoming = posts.filter(p => p.date >= today()).sort((a,b) => a.date.localeCompare(b.date)).slice(0,8);
+function Login({users,onLogin}){
+  const[email,setEmail]=useState("");const[pw,setPw]=useState("");const[err,setErr]=useState("");
+  function login(){const u=users.find(u=>u.email===email&&u.password===pw);if(u)onLogin(u.id);else setErr("Email o password non corretti");}
+  return(
+    <div style={{minHeight:"100vh",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{width:"100%",maxWidth:380}}>
+        <div style={{textAlign:"center",marginBottom:28}}>
+          <div style={{fontSize:44,marginBottom:10}}>📣</div>
+          <h1 style={{fontSize:24,fontWeight:700,color:"var(--text)"}}>SocialCal</h1>
+          <p style={{color:"var(--text2)",fontSize:14,marginTop:6}}>Accedi per continuare</p>
+        </div>
+        <div className="card" style={{padding:26}}>
+          {err&&<div style={{background:"var(--dangerbg)",color:"var(--danger)",padding:"9px 13px",borderRadius:8,fontSize:13,marginBottom:14,fontWeight:500}}>{err}</div>}
+          <div style={{display:"flex",flexDirection:"column",gap:13}}>
+            <div className="field"><label className="label">Email</label><input className="input" type="email" placeholder="tuaemail@esempio.com" value={email} onChange={e=>setEmail(e.target.value)}/></div>
+            <div className="field"><label className="label">Password</label><input className="input" type="password" placeholder="••••••••" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==="Enter"&&login()}/></div>
+            <button className="btn btn-primary" style={{width:"100%",padding:"12px",marginTop:2,fontSize:15}} onClick={login}>Accedi</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-  const [filter, setFilter] = useState(null);
-  const filtered = filter ? (
-    filter === "thisMonth" ? thisMonth :
-    filter === "clients" ? posts :
-    byStatus(filter)
-  ) : null;
-
-  const stats = [
-    { key:"clients",    label:"Clienti Attivi",  value:clients.length, color:"#6366f1", icon:"👥" },
-    { key:"thisMonth",  label:"Post Questo Mese", value:thisMonth.length, color:"#10b981", icon:"📊" },
-    { key:"Programmato",label:"Da Pubblicare",    value:byStatus("Programmato").length, color:"#f59e0b", icon:"🗓️" },
-    { key:"In Revisione",label:"In Lavorazione",  value:byStatus("In Revisione").length + byStatus("Da Editare").length + byStatus("Bozza").length, color:"#ef4444", icon:"⚙️" },
+function Dashboard({posts,clients,setPosts,setSection,lbl}){
+  const now=new Date();
+  const mk=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+  const thisMonth=posts.filter(p=>p.date?.startsWith(mk));
+  const byStatus=s=>posts.filter(p=>p.status===s);
+  const inProgress=[...byStatus("In Revisione"),...byStatus("Da Editare"),...byStatus("Bozza")];
+  const upcoming=posts.filter(p=>p.date>=today()).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,10);
+  const[filter,setFilter]=useState(null);
+  const filtered=filter==="thisMonth"?thisMonth:filter==="clients"?posts:filter==="scheduled"?byStatus("Programmato"):filter==="inprogress"?inProgress:filter?byStatus(filter):null;
+  const stats=[
+    {key:"clients",icon:"👥",label:"Clienti Attivi",value:clients.length,color:"#6366f1"},
+    {key:"thisMonth",icon:"📊",label:"Post Questo Mese",value:thisMonth.length,color:"var(--accent)"},
+    {key:"scheduled",icon:"🗓️",label:"Da Pubblicare",value:byStatus("Programmato").length,color:"var(--warn)"},
+    {key:"inprogress",icon:"⚙️",label:"In Lavorazione",value:inProgress.length,color:"var(--danger)"},
   ];
-
-  return (
-    <div style={{ padding:32 }}>
-      <h1 style={{ fontSize:26, fontWeight:700, color:"#f1f5f9", marginBottom:24 }}>{lbl("dash_title","Dashboard")}</h1>
-
-      {/* Stats */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:16, marginBottom:32 }}>
-        {stats.map(s => (
-          <button key={s.key} onClick={() => setFilter(filter===s.key?null:s.key)}
-            style={{ background: filter===s.key ? "#334155" : "#1e293b", border:`2px solid ${filter===s.key ? s.color : "#334155"}`,
-              borderRadius:12, padding:"20px 24px", cursor:"pointer", textAlign:"left", transition:"all .15s" }}>
-            <div style={{ fontSize:28, marginBottom:8 }}>{s.icon}</div>
-            <div style={{ fontSize:32, fontWeight:700, color:s.color }}>{s.value}</div>
-            <div style={{ fontSize:13, color:"#94a3b8", marginTop:2 }}>{s.label}</div>
-          </button>
+  return(
+    <div style={{padding:"28px 32px",maxWidth:1200}}>
+      <div className="section-header">
+        <h1 className="page-title">{lbl("dash_title","Dashboard")}</h1>
+        <div style={{fontSize:13,color:"var(--text3)"}}>{DAYS_IT[now.getDay()]}, {fmtDate(today())}</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:28}}>
+        {stats.map(s=>(
+          <div key={s.key} className={"stat-card"+(filter===s.key?" active":"")} onClick={()=>setFilter(filter===s.key?null:s.key)}>
+            <div style={{fontSize:22,marginBottom:10}}>{s.icon}</div>
+            <div style={{fontSize:30,fontWeight:700,color:s.color,lineHeight:1}}>{s.value}</div>
+            <div style={{fontSize:12.5,color:"var(--text2)",marginTop:5,fontWeight:500}}>{s.label}</div>
+          </div>
         ))}
       </div>
-
-      {/* Filtered posts */}
-      {filtered && (
-        <div style={{ background:"#1e293b", borderRadius:12, padding:20, marginBottom:32, border:"1px solid #334155" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-            <h3 style={{ margin:0, color:"#f1f5f9", fontSize:16 }}>
-              {filter === "clients" ? "Tutti i Post" :
-               filter === "thisMonth" ? "Post questo mese" :
-               `Post: ${filter}`}
-            </h3>
-            <button onClick={() => setFilter(null)} style={{ background:"none", border:"none", color:"#64748b", cursor:"pointer", fontSize:18 }}>✕</button>
-          </div>
-          {filtered.length === 0 ? <div style={{ color:"#64748b", fontSize:14 }}>Nessun post trovato</div> :
-            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-              {filtered.map(p => <PostRow key={p.id} post={p} setPosts={setPosts} />)}
+      {filtered&&(
+        <div className="card" style={{padding:20,marginBottom:24}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+            <div style={{fontWeight:600,fontSize:15}}>
+              {filter==="clients"?"Tutti i Post":filter==="thisMonth"?"Post questo mese":filter==="scheduled"?"Post programmati":filter==="inprogress"?"In lavorazione":`Stato: ${filter}`}
+              <span style={{marginLeft:8,fontSize:12,color:"var(--text3)",fontWeight:400}}>({filtered.length})</span>
             </div>
-          }
+            <button className="btn btn-ghost btn-sm" onClick={()=>setFilter(null)}>✕ Chiudi</button>
+          </div>
+          {filtered.length===0?<div className="empty-state"><div className="icon">📭</div><p>Nessun post trovato</p></div>:
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>{filtered.map(p=><PostRowComp key={p.id} post={p} clients={clients} setPosts={setPosts}/>)}</div>}
         </div>
       )}
-
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:24 }}>
-        {/* Status cards */}
-        <div style={{ background:"#1e293b", borderRadius:12, padding:20, border:"1px solid #334155" }}>
-          <h3 style={{ margin:"0 0 16px", color:"#f1f5f9", fontSize:16 }}>Stato Post</h3>
-          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-            {POST_STATUSES.map(s => {
-              const cnt = byStatus(s).length;
-              const sc = STATUS_COLORS[s];
-              return (
-                <button key={s} onClick={() => setFilter(filter===s?null:s)}
-                  style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
-                    padding:"8px 12px", borderRadius:8, border:`1px solid ${filter===s ? sc.bg : "transparent"}`,
-                    background: filter===s ? sc.bg+"22" : "#0f172a", cursor:"pointer", transition:"all .15s" }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <div style={{ width:10, height:10, borderRadius:"50%", background:sc.bg }} />
-                    <span style={{ fontSize:13, color:"#e2e8f0" }}>{s}</span>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+        <div className="card" style={{padding:20}}>
+          <div style={{fontWeight:600,fontSize:15,marginBottom:14}}>Stato Post</div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {POST_STATUSES.map(s=>{
+              const cnt=byStatus(s).length;const sc=STATUS_COLORS[s];
+              return(
+                <button key={s} onClick={()=>setFilter(filter===s?null:s)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",borderRadius:8,border:"1.5px solid",borderColor:filter===s?sc.bg:"transparent",background:filter===s?sc.light:"var(--surface2)",cursor:"pointer",transition:"var(--transition)"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <div style={{width:9,height:9,borderRadius:"50%",background:sc.bg}}/>
+                    <span style={{fontSize:13,fontWeight:500,color:"var(--text)"}}>{s}</span>
                   </div>
-                  <span style={{ fontSize:13, fontWeight:600, color:sc.bg }}>{cnt}</span>
+                  <span style={{fontSize:13,fontWeight:700,color:sc.bg}}>{cnt}</span>
                 </button>
               );
             })}
           </div>
         </div>
-
-        {/* Upcoming */}
-        <div style={{ background:"#1e293b", borderRadius:12, padding:20, border:"1px solid #334155" }}>
-          <h3 style={{ margin:"0 0 16px", color:"#f1f5f9", fontSize:16 }}>Prossimi Post</h3>
-          {upcoming.length === 0 ? <div style={{ color:"#64748b", fontSize:14 }}>Nessun post in programma</div> :
-            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-              {upcoming.map(p => <PostRow key={p.id} post={p} setPosts={setPosts} compact />)}
-            </div>
-          }
+        <div className="card" style={{padding:20}}>
+          <div style={{fontWeight:600,fontSize:15,marginBottom:14}}>Prossimi Post</div>
+          {upcoming.length===0?<div className="empty-state"><div className="icon">📅</div><p>Nessun post in programma</p></div>:
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>{upcoming.map(p=><PostRowComp key={p.id} post={p} clients={clients} setPosts={setPosts} compact/>)}</div>}
         </div>
       </div>
     </div>
   );
 }
 
-function PostRow({ post, setPosts, compact }) {
-  const [editing, setEditing] = useState(false);
-  const sc = STATUS_COLORS[post.status] || STATUS_COLORS["Bozza"];
-  return (
-    <div style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 12px", background:"#0f172a", borderRadius:8, border:"1px solid #1e293b" }}>
-      <div style={{ width:8, height:8, borderRadius:"50%", background:sc.bg, flexShrink:0 }} />
-      <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ fontSize:13, color:"#e2e8f0", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-          {post.title || "Post senza titolo"}
-        </div>
-        {!compact && <div style={{ fontSize:11, color:"#64748b" }}>{post.clientName} · {fmtDate(post.date)} · {post.platform}</div>}
-        {compact && <div style={{ fontSize:11, color:"#64748b" }}>{fmtDate(post.date)}</div>}
+function PostRowComp({post,clients,setPosts,compact}){
+  const sc=STATUS_COLORS[post.status]||STATUS_COLORS["Bozza"];
+  const cl=clients?.find(c=>c.id===post.clientId);
+  return(
+    <div className="post-row">
+      {cl&&<div style={{width:4,height:32,borderRadius:3,background:cl.color,flexShrink:0}}/>}
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:13.5,fontWeight:600,color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{post.title||"Post senza titolo"}</div>
+        <div style={{fontSize:11.5,color:"var(--text3)",marginTop:1}}>{compact?fmtDate(post.date):`${post.clientName||"—"} · ${fmtDate(post.date)} · ${post.platform||"—"}`}</div>
       </div>
-      <span style={{ fontSize:11, background:sc.bg+"33", color:sc.bg, padding:"2px 8px", borderRadius:20, flexShrink:0 }}>{post.status}</span>
-      <button onClick={() => setPosts(ps => ps.filter(x => x.id !== post.id))}
-        style={{ background:"none", border:"none", color:"#475569", cursor:"pointer", fontSize:14, flexShrink:0, padding:"0 2px" }}>🗑</button>
+      <span className="chip" style={{background:sc.light,color:sc.text,borderColor:sc.bg+"44",flexShrink:0}}>{post.status}</span>
+      <button className="btn btn-icon btn-danger" style={{flexShrink:0,opacity:.7}} onClick={e=>{e.stopPropagation();setPosts(ps=>ps.filter(x=>x.id!==post.id));}}>🗑</button>
     </div>
   );
 }
 
-// ─── CALENDAR ────────────────────────────────────────────────────────────────
-function CalendarView({ posts, setPosts, clients, lbl, memory, addMemory }) {
-  const [view, setView] = useState("month"); // month | week
-  const [year, setYear] = useState(new Date().getFullYear());
-  const [month, setMonth] = useState(new Date().getMonth());
-  const [weekStart, setWeekStart] = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() - d.getDay()); return d;
-  });
-  const [editPost, setEditPost] = useState(null);
-  const [newPostDate, setNewPostDate] = useState(null);
-  const [tooltip, setTooltip] = useState(null);
+function CalendarView({posts,setPosts,clients,lbl,memory,addMemory}){
+  const[view,setView]=useState("month");
+  const[year,setYear]=useState(new Date().getFullYear());
+  const[month,setMonth]=useState(new Date().getMonth());
+  const[weekStart,setWeekStart]=useState(()=>{const d=new Date();d.setDate(d.getDate()-d.getDay());return d;});
+  const[editPost,setEditPost]=useState(null);
+  const[newPostDate,setNewPostDate]=useState(null);
+  const[tooltip,setTooltip]=useState(null);
+  function prev(){if(view==="month"){month===0?(setMonth(11),setYear(y=>y-1)):setMonth(m=>m-1);}else{const d=new Date(weekStart);d.setDate(d.getDate()-7);setWeekStart(d);}}
+  function next(){if(view==="month"){month===11?(setMonth(0),setYear(y=>y+1)):setMonth(m=>m+1);}else{const d=new Date(weekStart);d.setDate(d.getDate()+7);setWeekStart(d);}}
+  const firstDay=new Date(year,month,1).getDay();
+  const daysInMonth=new Date(year,month+1,0).getDate();
+  const cells=[...Array(firstDay).fill(null),...Array.from({length:daysInMonth},(_,i)=>i+1)];
+  const weekDays=Array.from({length:7},(_,i)=>{const d=new Date(weekStart);d.setDate(d.getDate()+i);return d;});
+  function postsFor(ds){return posts.filter(p=>p.date===ds);}
+  function slotsFor(ds){const d=new Date(ds+"T00:00:00"),dow=d.getDay();return clients.filter(c=>c.scheduleDays?.includes(dow)&&!posts.find(p=>p.date===ds&&p.clientId===c.id));}
+  const periodLabel=view==="month"?`${MONTHS_IT[month]} ${year}`:`${fmtDate(weekDays[0])} – ${fmtDate(weekDays[6])}`;
 
-  function prevPeriod() {
-    if (view === "month") {
-      if (month === 0) { setMonth(11); setYear(y=>y-1); } else setMonth(m=>m-1);
-    } else {
-      const d = new Date(weekStart); d.setDate(d.getDate()-7); setWeekStart(d);
-    }
+  function CalTag({p,onClick}){
+    const sc=STATUS_COLORS[p.status]||STATUS_COLORS["Bozza"];
+    const cl=clients.find(c=>c.id===p.clientId);
+    return(
+      <div className="cal-tag" style={{background:sc.light,borderLeft:`3px solid ${sc.bg}`,color:"var(--text)"}} onClick={e=>{e.stopPropagation();onClick();}} onMouseEnter={e=>setTooltip({post:p,x:e.clientX,y:e.clientY})} onMouseLeave={()=>setTooltip(null)}>
+        {cl&&<div style={{width:6,height:6,borderRadius:"50%",background:cl.color,flexShrink:0}}/>}
+        <span style={{overflow:"hidden",textOverflow:"ellipsis",flex:1,fontWeight:500}}>{p.title||"Post"}</span>
+        <div style={{width:5,height:5,borderRadius:"50%",background:sc.bg,flexShrink:0}}/>
+      </div>
+    );
   }
-  function nextPeriod() {
-    if (view === "month") {
-      if (month === 11) { setMonth(0); setYear(y=>y+1); } else setMonth(m=>m+1);
-    } else {
-      const d = new Date(weekStart); d.setDate(d.getDate()+7); setWeekStart(d);
-    }
-  }
-
-  // Month grid
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month+1, 0).getDate();
-  const cells = [];
-  for (let i = 0; i < firstDay; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-
-  // Week days
-  const weekDays = Array.from({length:7}, (_,i) => {
-    const d = new Date(weekStart); d.setDate(d.getDate()+i); return d;
-  });
-
-  function postsForDate(dateStr) {
-    return posts.filter(p => p.date === dateStr);
+  function SlotTag({c,onClick}){
+    return(
+      <div className="cal-tag" style={{background:c.color+"18",border:`1px dashed ${c.color}`,color:c.color}} onClick={e=>{e.stopPropagation();onClick();}}>
+        <div style={{width:5,height:5,borderRadius:"50%",background:c.color,flexShrink:0}}/>
+        <span style={{overflow:"hidden",textOverflow:"ellipsis",flex:1,fontWeight:500}}>{c.name}</span>
+      </div>
+    );
   }
 
-  // Placeholder posts from client schedules
-  function placeholdersForDate(dateStr) {
-    const d = new Date(dateStr);
-    const dow = d.getDay(); // 0=Sun
-    return clients.filter(c => c.scheduleDays?.includes(dow) && !posts.find(p => p.date===dateStr && p.clientId===c.id && p.isPlaceholder));
-  }
-
-  function clickCell(dateStr) { setNewPostDate(dateStr); }
-
-  const periodLabel = view === "month"
-    ? `${MONTHS_IT[month]} ${year}`
-    : `${fmtDate(weekDays[0])} – ${fmtDate(weekDays[6])}`;
-
-  return (
-    <div style={{ padding:32 }}>
-      {/* Header */}
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:24, flexWrap:"wrap", gap:12 }}>
-        <h1 style={{ fontSize:24, fontWeight:700, color:"#f1f5f9", margin:0 }}>{lbl("cal_title","Calendario Editoriale")}</h1>
-        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-          <div style={{ display:"flex", background:"#1e293b", borderRadius:8, overflow:"hidden", border:"1px solid #334155" }}>
-            {["month","week"].map(v => (
-              <button key={v} onClick={() => setView(v)}
-                style={{ padding:"8px 16px", background:view===v?"#6366f1":"transparent", color:view===v?"#fff":"#94a3b8",
-                  border:"none", cursor:"pointer", fontSize:13, fontWeight:view===v?600:400 }}>
-                {v==="month"?"Mese":"Settimana"}
-              </button>
-            ))}
+  return(
+    <div style={{padding:"28px 32px"}}>
+      <div className="section-header">
+        <h1 className="page-title">{lbl("cal_title","Calendario Editoriale")}</h1>
+        <div style={{display:"flex",gap:10,alignItems:"center"}}>
+          <div className="pill-tabs">
+            <button className={"pill-tab"+(view==="month"?" active":"")} onClick={()=>setView("month")}>Mese</button>
+            <button className={"pill-tab"+(view==="week"?" active":"")} onClick={()=>setView("week")}>Settimana</button>
           </div>
-          <button onClick={prevPeriod} style={navBtn}>‹</button>
-          <span style={{ color:"#f1f5f9", fontSize:15, fontWeight:600, minWidth:180, textAlign:"center" }}>{periodLabel}</span>
-          <button onClick={nextPeriod} style={navBtn}>›</button>
+          <button className="btn btn-ghost btn-sm" style={{fontSize:16,padding:"6px 12px"}} onClick={prev}>‹</button>
+          <span style={{fontSize:14,fontWeight:600,minWidth:180,textAlign:"center",color:"var(--text)"}}>{periodLabel}</span>
+          <button className="btn btn-ghost btn-sm" style={{fontSize:16,padding:"6px 12px"}} onClick={next}>›</button>
         </div>
       </div>
-
-      {/* Legend */}
-      <div style={{ display:"flex", flexWrap:"wrap", gap:10, marginBottom:20 }}>
-        {Object.entries(STATUS_COLORS).map(([s, sc]) => (
-          <div key={s} style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:"#94a3b8" }}>
-            <div style={{ width:10, height:10, borderRadius:3, background:sc.bg }} />
-            {s}
+      <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:16,alignItems:"center"}}>
+        <span style={{fontSize:11.5,color:"var(--text3)",fontWeight:600,marginRight:4}}>LEGENDA:</span>
+        {Object.entries(STATUS_COLORS).map(([s,sc])=>(
+          <div key={s} style={{display:"flex",alignItems:"center",gap:5}}>
+            <div style={{width:8,height:8,borderRadius:2,background:sc.bg}}/>
+            <span style={{fontSize:11.5,color:"var(--text2)",fontWeight:500}}>{s}</span>
           </div>
         ))}
-        <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:"#94a3b8" }}>
-          <div style={{ width:10, height:10, borderRadius:3, background:"#334155", border:"1px dashed #64748b" }} />
-          Slot Pianificato
+        <div style={{display:"flex",alignItems:"center",gap:5}}>
+          <div style={{width:8,height:8,borderRadius:2,background:"var(--border2)",border:"1px dashed var(--text3)"}}/>
+          <span style={{fontSize:11.5,color:"var(--text2)",fontWeight:500}}>Slot pianificato</span>
         </div>
       </div>
-
-      {/* Month View */}
-      {view === "month" && (
-        <div style={{ background:"#1e293b", borderRadius:12, overflow:"hidden", border:"1px solid #334155" }}>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", background:"#334155" }}>
-            {DAYS_IT.map(d => (
-              <div key={d} style={{ padding:"10px 0", textAlign:"center", fontSize:12, fontWeight:600, color:"#94a3b8" }}>{d}</div>
-            ))}
-          </div>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:1, background:"#334155" }}>
-            {cells.map((day, i) => {
-              if (!day) return <div key={i} style={{ background:"#1e293b", minHeight:100 }} />;
-              const dateStr = isoDate(year, month, day);
-              const dayPosts = postsForDate(dateStr);
-              const slots = placeholdersForDate(dateStr);
-              const isToday = dateStr === today();
-              return (
-                <div key={i} onClick={() => clickCell(dateStr)}
-                  style={{ background:"#1e293b", minHeight:100, padding:"6px 6px 4px", cursor:"pointer",
-                    border: isToday ? "2px solid #6366f1" : "2px solid transparent", position:"relative" }}>
-                  <div style={{ fontSize:12, fontWeight:isToday?700:400, color:isToday?"#6366f1":"#64748b", marginBottom:4 }}>{day}</div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
-                    {slots.map(c => (
-                      <div key={c.id} title={c.name}
-                        onClick={e=>{e.stopPropagation();setNewPostDate(dateStr);}}
-                        style={{ fontSize:10, padding:"2px 5px", borderRadius:4, background:c.color+"33",
-                          borderLeft:`3px solid ${c.color}`, color:c.color, cursor:"pointer",
-                          whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", border:`1px dashed ${c.color}` }}>
-                        {c.name}
-                      </div>
-                    ))}
-                    {dayPosts.map(p => {
-                      const sc = STATUS_COLORS[p.status] || STATUS_COLORS["Bozza"];
-                      const cl = clients.find(c=>c.id===p.clientId);
-                      return (
-                        <div key={p.id}
-                          onMouseEnter={e => setTooltip({ post:p, x:e.clientX, y:e.clientY })}
-                          onMouseLeave={() => setTooltip(null)}
-                          onClick={e=>{e.stopPropagation();setEditPost(p);}}
-                          style={{ fontSize:10, padding:"2px 5px", borderRadius:4,
-                            background:sc.bg+"33", borderLeft:`3px solid ${sc.bg}`,
-                            color:"#e2e8f0", cursor:"pointer", display:"flex", alignItems:"center", gap:3,
-                            whiteSpace:"nowrap", overflow:"visible", maxWidth:"100%" }}>
-                          {cl && <div style={{ width:6, height:6, borderRadius:"50%", background:cl.color, flexShrink:0 }} />}
-                          <span style={{ overflow:"hidden", textOverflow:"ellipsis", flex:1, minWidth:0 }}>{p.title||"Post"}</span>
-                          <div style={{ width:5, height:5, borderRadius:"50%", background:sc.bg, flexShrink:0 }} />
-                        </div>
-                      );
-                    })}
+      <div className="card" style={{overflow:"hidden",padding:0}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",background:"var(--surface2)",borderBottom:"1.5px solid var(--border)"}}>
+          {DAYS_IT.map(d=><div key={d} style={{padding:"9px 0",textAlign:"center",fontSize:12,fontWeight:600,color:"var(--text3)",letterSpacing:".04em"}}>{d}</div>)}
+        </div>
+        {view==="month"&&(
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
+            {cells.map((day,i)=>{
+              if(!day)return <div key={i} style={{background:"var(--surface2)",minHeight:96,borderRight:"1px solid var(--border)",borderBottom:"1px solid var(--border)"}}/>;
+              const ds=isoDate(year,month,day);
+              const dayPosts=postsFor(ds);const slots=slotsFor(ds);const isToday=ds===today();
+              return(
+                <div key={i} className={"cal-cell"+(isToday?" today":"")} onClick={()=>setNewPostDate(ds)}>
+                  <div style={{fontSize:12,fontWeight:isToday?700:400,color:isToday?"var(--accent)":"var(--text3)",marginBottom:4}}>
+                    {isToday?<span style={{background:"var(--accent)",color:"#fff",borderRadius:"50%",width:19,height:19,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11}}>{day}</span>:day}
                   </div>
+                  {slots.map(c=><SlotTag key={c.id} c={c} onClick={()=>setNewPostDate(ds)}/>)}
+                  {dayPosts.map(p=><CalTag key={p.id} p={p} onClick={()=>setEditPost(p)}/>)}
                 </div>
               );
             })}
           </div>
-        </div>
-      )}
-
-      {/* Week View */}
-      {view === "week" && (
-        <div style={{ background:"#1e293b", borderRadius:12, overflow:"hidden", border:"1px solid #334155" }}>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", background:"#334155" }}>
-            {weekDays.map((d,i) => {
-              const ds = isoDate(d.getFullYear(),d.getMonth(),d.getDate());
-              const isToday = ds === today();
-              return (
-                <div key={i} style={{ padding:"10px 8px", textAlign:"center", background:isToday?"#6366f122":"transparent" }}>
-                  <div style={{ fontSize:11, color:"#64748b" }}>{DAYS_IT[d.getDay()]}</div>
-                  <div style={{ fontSize:16, fontWeight:isToday?700:400, color:isToday?"#6366f1":"#e2e8f0" }}>{d.getDate()}</div>
+        )}
+        {view==="week"&&(
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
+            {weekDays.map((d,i)=>{
+              const ds=isoDate(d.getFullYear(),d.getMonth(),d.getDate());
+              const dayPosts=postsFor(ds);const slots=slotsFor(ds);const isToday=ds===today();
+              return(
+                <div key={i} className={"cal-cell"+(isToday?" today":"")} style={{minHeight:200}} onClick={()=>setNewPostDate(ds)}>
+                  <div style={{fontSize:11,color:"var(--text3)",fontWeight:600,marginBottom:2}}>{DAYS_IT[d.getDay()]}</div>
+                  <div style={{fontSize:18,fontWeight:isToday?700:500,color:isToday?"var(--accent)":"var(--text)",marginBottom:8}}>{d.getDate()}</div>
+                  {slots.map(c=><SlotTag key={c.id} c={c} onClick={()=>setNewPostDate(ds)}/>)}
+                  {dayPosts.map(p=><CalTag key={p.id} p={p} onClick={()=>setEditPost(p)}/>)}
                 </div>
               );
             })}
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:1, background:"#334155" }}>
-            {weekDays.map((d,i) => {
-              const ds = isoDate(d.getFullYear(),d.getMonth(),d.getDate());
-              const dayPosts = postsForDate(ds);
-              const slots = placeholdersForDate(ds);
-              return (
-                <div key={i} onClick={() => clickCell(ds)}
-                  style={{ background:"#1e293b", minHeight:200, padding:"8px 6px", cursor:"pointer" }}>
-                  <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-                    {slots.map(c => (
-                      <div key={c.id} onClick={e=>{e.stopPropagation();setNewPostDate(ds);}}
-                        style={{ fontSize:11, padding:"4px 7px", borderRadius:5, background:c.color+"22",
-                          border:`1px dashed ${c.color}`, color:c.color, cursor:"pointer" }}>
-                        {c.name}
-                      </div>
-                    ))}
-                    {dayPosts.map(p => {
-                      const sc = STATUS_COLORS[p.status] || STATUS_COLORS["Bozza"];
-                      const cl = clients.find(c=>c.id===p.clientId);
-                      return (
-                        <div key={p.id}
-                          onMouseEnter={e => setTooltip({ post:p, x:e.clientX, y:e.clientY })}
-                          onMouseLeave={() => setTooltip(null)}
-                          onClick={e=>{e.stopPropagation();setEditPost(p);}}
-                          style={{ fontSize:11, padding:"4px 7px", borderRadius:5,
-                            background:sc.bg+"22", borderLeft:`3px solid ${sc.bg}`,
-                            color:"#e2e8f0", cursor:"pointer" }}>
-                          {cl && <span style={{ display:"inline-block", width:7, height:7, borderRadius:"50%", background:cl.color, marginRight:4 }} />}
-                          <strong style={{ fontSize:11 }}>{p.title||"Post"}</strong>
-                          <div style={{ fontSize:10, color:sc.bg, marginTop:2 }}>{p.status}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+        )}
+      </div>
+      {tooltip&&(
+        <div className="tooltip" style={{left:tooltip.x+14,top:tooltip.y+14}}>
+          <div style={{fontWeight:600,marginBottom:3}}>{tooltip.post.title||"Post senza titolo"}</div>
+          <div style={{opacity:.8,fontSize:11.5}}>{tooltip.post.clientName} · {tooltip.post.platform}</div>
+          <div style={{opacity:.8,fontSize:11.5}}>{fmtDate(tooltip.post.date)}</div>
+          <div style={{marginTop:6}}><span style={{background:STATUS_COLORS[tooltip.post.status]?.bg,color:"#fff",padding:"2px 8px",borderRadius:99,fontSize:11,fontWeight:600}}>{tooltip.post.status}</span></div>
+          {tooltip.post.caption&&<div style={{marginTop:6,opacity:.7,fontSize:11,borderTop:"1px solid rgba(255,255,255,.2)",paddingTop:6}}>{tooltip.post.caption.slice(0,70)}{tooltip.post.caption.length>70?"…":""}</div>}
         </div>
       )}
-
-      {/* Tooltip */}
-      {tooltip && (
-        <div style={{ position:"fixed", left:tooltip.x+12, top:tooltip.y+12, zIndex:9999,
-          background:"#1e293b", border:"1px solid #334155", borderRadius:10, padding:"12px 16px",
-          boxShadow:"0 8px 32px #00000066", maxWidth:260, pointerEvents:"none" }}>
-          <div style={{ fontWeight:600, color:"#f1f5f9", fontSize:14, marginBottom:4 }}>{tooltip.post.title||"Post senza titolo"}</div>
-          <div style={{ fontSize:12, color:"#94a3b8" }}>{tooltip.post.clientName}</div>
-          <div style={{ fontSize:12, color:"#94a3b8" }}>{fmtDate(tooltip.post.date)} · {tooltip.post.platform}</div>
-          <div style={{ marginTop:6 }}>
-            <span style={{ fontSize:11, background:STATUS_COLORS[tooltip.post.status]?.bg+"33",
-              color:STATUS_COLORS[tooltip.post.status]?.bg, padding:"2px 8px", borderRadius:20 }}>
-              {tooltip.post.status}
-            </span>
-          </div>
-          {tooltip.post.caption && <div style={{ fontSize:11, color:"#64748b", marginTop:6, borderTop:"1px solid #334155", paddingTop:6 }}>{tooltip.post.caption.slice(0,80)}{tooltip.post.caption.length>80?"…":""}</div>}
-        </div>
-      )}
-
-      {/* Post Modal */}
-      {(editPost || newPostDate) && (
-        <PostModal
-          post={editPost}
-          defaultDate={newPostDate}
-          clients={clients}
-          memory={memory}
-          addMemory={addMemory}
-          onSave={p => {
-            if (editPost) setPosts(ps => ps.map(x => x.id===p.id ? p : x));
-            else setPosts(ps => [...ps, { ...p, id:genId() }]);
-            setEditPost(null); setNewPostDate(null);
-          }}
-          onDelete={id => { setPosts(ps => ps.filter(x=>x.id!==id)); setEditPost(null); }}
-          onClose={() => { setEditPost(null); setNewPostDate(null); }}
-        />
+      {(editPost||newPostDate)&&(
+        <PostModal post={editPost} defaultDate={newPostDate} clients={clients} memory={memory} addMemory={addMemory}
+          onSave={p=>{if(editPost)setPosts(ps=>ps.map(x=>x.id===p.id?p:x));else setPosts(ps=>[...ps,{...p,id:genId()}]);setEditPost(null);setNewPostDate(null);}}
+          onDelete={id=>{setPosts(ps=>ps.filter(x=>x.id!==id));setEditPost(null);}}
+          onClose={()=>{setEditPost(null);setNewPostDate(null);}}/>
       )}
     </div>
   );
 }
 
-const navBtn = { padding:"8px 14px", background:"#1e293b", border:"1px solid #334155", borderRadius:8, color:"#e2e8f0", cursor:"pointer", fontSize:16 };
-
-// ─── POST MODAL ───────────────────────────────────────────────────────────────
-function PostModal({ post, defaultDate, clients, memory, addMemory, onSave, onDelete, onClose }) {
-  const [form, setForm] = useState(post || {
-    title:"", clientId:"", clientName:"", platform:"Instagram", date:defaultDate||today(),
-    status:"Bozza", caption:"", hashtags:"", firstComment:"", notes:"", isPlaceholder:false
-  });
-  const [showSuggestions, setShowSuggestions] = useState({ caption:false, hashtags:false, firstComment:false });
-
-  function upd(k, v) { setForm(f => ({ ...f, [k]:v })); }
-
-  function save() {
-    const cl = clients.find(c => c.id === form.clientId);
-    const p = { ...form, clientName: cl?.name || form.clientName };
-    if (form.caption) addMemory("captions", form.caption);
-    if (form.hashtags) addMemory("hashtags", form.hashtags);
-    if (form.firstComment) addMemory("firstComments", form.firstComment);
-    onSave(p);
+function PostModal({post,defaultDate,clients,memory,addMemory,onSave,onDelete,onClose}){
+  const[form,setForm]=useState(post||{title:"",clientId:"",clientName:"",platform:"Instagram",date:defaultDate||today(),status:"Bozza",caption:"",hashtags:"",firstComment:"",notes:""});
+  function upd(k,v){setForm(f=>({...f,[k]:v}));}
+  function save(){
+    const cl=clients.find(c=>c.id===form.clientId);
+    if(form.caption)addMemory("captions",form.caption);
+    if(form.hashtags)addMemory("hashtags",form.hashtags);
+    if(form.firstComment)addMemory("firstComments",form.firstComment);
+    onSave({...form,clientName:cl?.name||form.clientName});
   }
-
-  return (
-    <div style={{ position:"fixed", inset:0, background:"#00000088", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
-      <div style={{ background:"#1e293b", borderRadius:16, width:"100%", maxWidth:600, maxHeight:"90vh", overflow:"auto", border:"1px solid #334155" }}>
-        <div style={{ padding:"20px 24px", borderBottom:"1px solid #334155", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <h3 style={{ margin:0, color:"#f1f5f9", fontSize:18 }}>{post ? "Modifica Post" : "Nuovo Post"}</h3>
-          <button onClick={onClose} style={{ background:"none", border:"none", color:"#64748b", cursor:"pointer", fontSize:20 }}>✕</button>
+  const sc=STATUS_COLORS[form.status]||STATUS_COLORS["Bozza"];
+  return(
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal">
+        <div style={{padding:"18px 22px",borderBottom:"1.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{fontWeight:700,fontSize:16,color:"var(--text)"}}>{post?"Modifica Post":"Nuovo Post"}</div>
+          <button className="btn btn-ghost btn-icon" onClick={onClose} style={{fontSize:16}}>✕</button>
         </div>
-        <div style={{ padding:24, display:"flex", flexDirection:"column", gap:16 }}>
-
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-            <Field label="Titolo">
-              <input value={form.title} onChange={e=>upd("title",e.target.value)} style={input} placeholder="Titolo del post" />
-            </Field>
-            <Field label="Cliente">
-              <select value={form.clientId} onChange={e=>{
-                const cl=clients.find(c=>c.id===e.target.value);
-                upd("clientId",e.target.value); upd("clientName",cl?.name||"");
-              }} style={input}>
+        <div style={{padding:22,display:"flex",flexDirection:"column",gap:15}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div className="field"><label className="label">Titolo</label><input className="input" value={form.title} onChange={e=>upd("title",e.target.value)} placeholder="Titolo del post"/></div>
+            <div className="field"><label className="label">Cliente</label>
+              <select className="input" value={form.clientId} onChange={e=>{const cl=clients.find(c=>c.id===e.target.value);upd("clientId",e.target.value);upd("clientName",cl?.name||"");}}>
                 <option value="">Seleziona cliente</option>
                 {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
-            </Field>
+            </div>
           </div>
-
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
-            <Field label="Data">
-              <input type="date" value={form.date} onChange={e=>upd("date",e.target.value)} style={input} />
-            </Field>
-            <Field label="Piattaforma">
-              <select value={form.platform} onChange={e=>upd("platform",e.target.value)} style={input}>
-                {PLATFORMS.map(p=><option key={p}>{p}</option>)}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+            <div className="field"><label className="label">Data</label><input className="input" type="date" value={form.date} onChange={e=>upd("date",e.target.value)}/></div>
+            <div className="field"><label className="label">Piattaforma</label>
+              <select className="input" value={form.platform} onChange={e=>upd("platform",e.target.value)}>
+                {PLATFORMS.map(p=><option key={p}>{PICONS[p]} {p}</option>)}
               </select>
-            </Field>
-            <Field label="Stato">
-              <select value={form.status} onChange={e=>upd("status",e.target.value)} style={input}>
+            </div>
+            <div className="field"><label className="label">Stato</label>
+              <select className="input" value={form.status} onChange={e=>upd("status",e.target.value)} style={{background:sc.light,color:sc.text,borderColor:sc.bg+"88"}}>
                 {POST_STATUSES.map(s=><option key={s}>{s}</option>)}
               </select>
-            </Field>
+            </div>
           </div>
-
-          <Field label="Caption">
-            <div style={{ position:"relative" }}>
-              <textarea value={form.caption} onChange={e=>upd("caption",e.target.value)}
-                onFocus={()=>setShowSuggestions(s=>({...s,caption:true}))}
-                onBlur={()=>setTimeout(()=>setShowSuggestions(s=>({...s,caption:false})),150)}
-                style={{...input, minHeight:80, resize:"vertical"}} placeholder="Testo del post..." />
-              {showSuggestions.caption && memory.captions?.length > 0 && (
-                <SuggestionList items={memory.captions} onSelect={v=>upd("caption",v)} />
-              )}
-            </div>
-          </Field>
-
-          <Field label="Hashtag">
-            <div style={{ position:"relative" }}>
-              <input value={form.hashtags} onChange={e=>upd("hashtags",e.target.value)}
-                onFocus={()=>setShowSuggestions(s=>({...s,hashtags:true}))}
-                onBlur={()=>setTimeout(()=>setShowSuggestions(s=>({...s,hashtags:false})),150)}
-                style={input} placeholder="#hashtag #esempio" />
-              {showSuggestions.hashtags && memory.hashtags?.length > 0 && (
-                <SuggestionList items={memory.hashtags} onSelect={v=>upd("hashtags",v)} />
-              )}
-            </div>
-          </Field>
-
-          <Field label="Primo Commento">
-            <div style={{ position:"relative" }}>
-              <textarea value={form.firstComment} onChange={e=>upd("firstComment",e.target.value)}
-                onFocus={()=>setShowSuggestions(s=>({...s,firstComment:true}))}
-                onBlur={()=>setTimeout(()=>setShowSuggestions(s=>({...s,firstComment:false})),150)}
-                style={{...input, minHeight:60, resize:"vertical"}} placeholder="Testo del primo commento..." />
-              {showSuggestions.firstComment && memory.firstComments?.length > 0 && (
-                <SuggestionList items={memory.firstComments} onSelect={v=>upd("firstComment",v)} />
-              )}
-            </div>
-          </Field>
-
-          <Field label="Note interne">
-            <textarea value={form.notes} onChange={e=>upd("notes",e.target.value)}
-              style={{...input, minHeight:60, resize:"vertical"}} placeholder="Note per il team..." />
-          </Field>
-
-          <div style={{ display:"flex", gap:8, justifyContent:"space-between" }}>
-            {post && <button onClick={()=>onDelete(post.id)} style={{...btn, background:"#7f1d1d", color:"#fca5a5"}}>Elimina</button>}
-            <div style={{ display:"flex", gap:8, marginLeft:"auto" }}>
-              <button onClick={onClose} style={{...btn, background:"#334155", color:"#94a3b8"}}>Annulla</button>
-              <button onClick={save} style={{...btn, background:"#6366f1", color:"#fff"}}>Salva</button>
+          <div className="field"><label className="label">Caption</label><SugInput value={form.caption} onChange={v=>upd("caption",v)} suggestions={memory.captions} placeholder="Testo del post..." multiline/></div>
+          <div className="field"><label className="label">Hashtag</label><SugInput value={form.hashtags} onChange={v=>upd("hashtags",v)} suggestions={memory.hashtags} placeholder="#hashtag #esempio"/></div>
+          <div className="field"><label className="label">Primo Commento</label><SugInput value={form.firstComment} onChange={v=>upd("firstComment",v)} suggestions={memory.firstComments} placeholder="Testo del primo commento..." multiline/></div>
+          <div className="field"><label className="label">Note interne</label><textarea className="input" value={form.notes} onChange={e=>upd("notes",e.target.value)} placeholder="Note per il team..." style={{minHeight:56,resize:"vertical"}}/></div>
+          <div style={{display:"flex",gap:8,justifyContent:"space-between",marginTop:4}}>
+            {post&&<button className="btn btn-danger btn-sm" onClick={()=>onDelete(post.id)}>🗑 Elimina</button>}
+            <div style={{display:"flex",gap:8,marginLeft:"auto"}}>
+              <button className="btn btn-ghost" onClick={onClose}>Annulla</button>
+              <button className="btn btn-primary" onClick={save}>Salva Post</button>
             </div>
           </div>
         </div>
@@ -632,257 +474,167 @@ function PostModal({ post, defaultDate, clients, memory, addMemory, onSave, onDe
   );
 }
 
-function SuggestionList({ items, onSelect }) {
-  return (
-    <div style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:100, background:"#0f172a",
-      border:"1px solid #334155", borderRadius:8, maxHeight:150, overflowY:"auto", boxShadow:"0 4px 20px #00000066" }}>
-      {items.slice(0,8).map((it,i) => (
-        <div key={i} onMouseDown={()=>onSelect(it)}
-          style={{ padding:"8px 12px", cursor:"pointer", fontSize:12, color:"#94a3b8",
-            borderBottom:"1px solid #1e293b", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}
-          onMouseEnter={e=>e.target.style.background="#1e293b"}
-          onMouseLeave={e=>e.target.style.background="transparent"}>
-          {it}
+function SugInput({value,onChange,suggestions,placeholder,multiline}){
+  const[open,setOpen]=useState(false);
+  const filtered=suggestions?.filter(s=>s!==value).slice(0,6)||[];
+  const props={className:"input",value,placeholder,onChange:e=>onChange(e.target.value),onFocus:()=>setOpen(true),onBlur:()=>setTimeout(()=>setOpen(false),160)};
+  return(
+    <div style={{position:"relative"}}>
+      {multiline?<textarea {...props} style={{minHeight:72,resize:"vertical"}}/>:<input {...props}/>}
+      {open&&filtered.length>0&&(
+        <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:200,background:"var(--surface)",border:"1.5px solid var(--border)",borderRadius:10,boxShadow:"var(--shadow2)",overflow:"hidden",marginTop:4}}>
+          {filtered.map((s,i)=>(
+            <div key={i} onMouseDown={()=>onChange(s)} style={{padding:"8px 12px",fontSize:12.5,color:"var(--text2)",cursor:"pointer",borderBottom:i<filtered.length-1?"1px solid var(--border)":"none",transition:"background .1s",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}
+              onMouseEnter={e=>e.target.style.background="var(--surface2)"} onMouseLeave={e=>e.target.style.background="transparent"}>{s}</div>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }
 
-function Field({ label, children }) {
-  return (
-    <div>
-      <label style={{ fontSize:12, color:"#94a3b8", display:"block", marginBottom:5, fontWeight:500 }}>{label}</label>
-      {children}
-    </div>
-  );
-}
-
-const input = { width:"100%", padding:"9px 12px", borderRadius:8, background:"#0f172a", border:"1px solid #334155",
-  color:"#e2e8f0", fontSize:13, boxSizing:"border-box", outline:"none" };
-const btn = { padding:"9px 20px", borderRadius:8, border:"none", cursor:"pointer", fontSize:13, fontWeight:600 };
-
-// ─── POSTS SECTION ────────────────────────────────────────────────────────────
-function PostsSection({ posts, setPosts, clients, lbl, memory, addMemory, user }) {
-  const [editPost, setEditPost] = useState(null);
-  const [newPost, setNewPost] = useState(false);
-  const [filterStatus, setFilterStatus] = useState("");
-  const [filterClient, setFilterClient] = useState("");
-  const [search, setSearch] = useState("");
-
-  const canEdit = user.role !== "viewer";
-
-  const filtered = posts.filter(p =>
-    (!filterStatus || p.status === filterStatus) &&
-    (!filterClient || p.clientId === filterClient) &&
-    (!search || p.title?.toLowerCase().includes(search.toLowerCase()) || p.clientName?.toLowerCase().includes(search.toLowerCase()))
-  ).sort((a,b) => a.date?.localeCompare(b.date));
-
-  return (
-    <div style={{ padding:32 }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24, flexWrap:"wrap", gap:12 }}>
-        <h1 style={{ fontSize:24, fontWeight:700, color:"#f1f5f9", margin:0 }}>{lbl("posts_title","Post")}</h1>
-        {canEdit && <button onClick={()=>setNewPost(true)} style={{...btn, background:"#6366f1", color:"#fff", fontSize:14}}>+ Nuovo Post</button>}
+function PostsSection({posts,setPosts,clients,lbl,memory,addMemory,user}){
+  const[editPost,setEditPost]=useState(null);const[newPost,setNewPost]=useState(false);
+  const[filterStatus,setFilterStatus]=useState("");const[filterClient,setFilterClient]=useState("");const[search,setSearch]=useState("");
+  const canEdit=user.role!=="viewer";
+  const filtered=posts.filter(p=>(!filterStatus||p.status===filterStatus)&&(!filterClient||p.clientId===filterClient)&&(!search||p.title?.toLowerCase().includes(search.toLowerCase())||p.clientName?.toLowerCase().includes(search.toLowerCase()))).sort((a,b)=>a.date?.localeCompare(b.date));
+  return(
+    <div style={{padding:"28px 32px"}}>
+      <div className="section-header">
+        <h1 className="page-title">{lbl("posts_title","Post")}</h1>
+        {canEdit&&<button className="btn btn-primary" onClick={()=>setNewPost(true)}>+ Nuovo Post</button>}
       </div>
-
-      <div style={{ display:"flex", gap:10, marginBottom:20, flexWrap:"wrap" }}>
-        <input placeholder="Cerca..." value={search} onChange={e=>setSearch(e.target.value)}
-          style={{...input, width:200}} />
-        <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} style={{...input, width:160}}>
+      <div style={{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap"}}>
+        <input className="input" placeholder="🔍 Cerca..." value={search} onChange={e=>setSearch(e.target.value)} style={{maxWidth:220}}/>
+        <select className="input" value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} style={{maxWidth:180}}>
           <option value="">Tutti gli stati</option>
           {POST_STATUSES.map(s=><option key={s}>{s}</option>)}
         </select>
-        <select value={filterClient} onChange={e=>setFilterClient(e.target.value)} style={{...input, width:180}}>
+        <select className="input" value={filterClient} onChange={e=>setFilterClient(e.target.value)} style={{maxWidth:200}}>
           <option value="">Tutti i clienti</option>
           {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
+        {(search||filterStatus||filterClient)&&<button className="btn btn-ghost btn-sm" onClick={()=>{setSearch("");setFilterStatus("");setFilterClient("");}}>✕ Reset</button>}
       </div>
-
-      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-        {filtered.length === 0 && <div style={{ color:"#64748b", fontSize:14, padding:20 }}>Nessun post trovato</div>}
-        {filtered.map(p => {
-          const sc = STATUS_COLORS[p.status] || STATUS_COLORS["Bozza"];
-          const cl = clients.find(c=>c.id===p.clientId);
-          return (
-            <div key={p.id} style={{ background:"#1e293b", borderRadius:10, padding:"14px 18px",
-              border:"1px solid #334155", display:"flex", alignItems:"center", gap:12, cursor:"pointer" }}
-              onClick={()=>canEdit?setEditPost(p):null}>
-              {cl && <div style={{ width:10, height:36, borderRadius:3, background:cl.color, flexShrink:0 }} />}
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontWeight:600, color:"#f1f5f9", fontSize:14, marginBottom:2 }}>{p.title||"Post senza titolo"}</div>
-                <div style={{ fontSize:12, color:"#64748b" }}>{p.clientName} · {fmtDate(p.date)} · {p.platform}</div>
+      <div style={{fontSize:12.5,color:"var(--text3)",marginBottom:12,fontWeight:500}}>{filtered.length} post trovati</div>
+      {filtered.length===0?<div className="empty-state card" style={{padding:48}}><div className="icon">✏️</div><p>Nessun post trovato</p></div>:
+        <div style={{display:"flex",flexDirection:"column",gap:7}}>
+          {filtered.map(p=>{
+            const sc=STATUS_COLORS[p.status]||STATUS_COLORS["Bozza"];const cl=clients.find(c=>c.id===p.clientId);
+            return(
+              <div key={p.id} className="post-row" onClick={()=>canEdit&&setEditPost(p)}>
+                {cl&&<div style={{width:4,height:38,borderRadius:3,background:cl.color,flexShrink:0}}/>}
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:14,fontWeight:600,color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.title||"Post senza titolo"}</div>
+                  <div style={{fontSize:12,color:"var(--text3)",marginTop:1}}>{p.clientName||"—"} · {fmtDate(p.date)} · {PICONS[p.platform]} {p.platform}</div>
+                </div>
+                <span className="chip" style={{background:sc.light,color:sc.text,borderColor:sc.bg+"55"}}>{p.status}</span>
+                {canEdit&&<button className="btn btn-icon btn-danger" style={{opacity:.65}} onClick={e=>{e.stopPropagation();setPosts(ps=>ps.filter(x=>x.id!==p.id));}}>🗑</button>}
               </div>
-              <span style={{ fontSize:12, background:sc.bg+"33", color:sc.bg, padding:"4px 10px", borderRadius:20, flexShrink:0 }}>{p.status}</span>
-              {canEdit && <button onClick={e=>{e.stopPropagation();setPosts(ps=>ps.filter(x=>x.id!==p.id));}}
-                style={{ background:"none", border:"none", color:"#475569", cursor:"pointer", fontSize:15 }}>🗑</button>}
-            </div>
-          );
-        })}
-      </div>
-
-      {(editPost || newPost) && (
-        <PostModal
-          post={editPost||undefined}
-          defaultDate={today()}
-          clients={clients}
-          memory={memory}
-          addMemory={addMemory}
-          onSave={p => {
-            if (editPost) setPosts(ps => ps.map(x=>x.id===p.id?p:x));
-            else setPosts(ps=>[...ps,{...p,id:genId()}]);
-            setEditPost(null); setNewPost(false);
-          }}
+            );
+          })}
+        </div>
+      }
+      {(editPost||newPost)&&(
+        <PostModal post={editPost||undefined} defaultDate={today()} clients={clients} memory={memory} addMemory={addMemory}
+          onSave={p=>{if(editPost)setPosts(ps=>ps.map(x=>x.id===p.id?p:x));else setPosts(ps=>[...ps,{...p,id:genId()}]);setEditPost(null);setNewPost(false);}}
           onDelete={id=>{setPosts(ps=>ps.filter(x=>x.id!==id));setEditPost(null);}}
-          onClose={()=>{setEditPost(null);setNewPost(false);}}
-        />
+          onClose={()=>{setEditPost(null);setNewPost(false);}}/>
       )}
     </div>
   );
 }
 
-// ─── CLIENTS ─────────────────────────────────────────────────────────────────
-function ClientsSection({ clients, setClients, posts, lbl, setLbl }) {
-  const [editing, setEditing] = useState(null);
-  const [newClient, setNewClient] = useState(false);
-  const [renaming, setRenaming] = useState(null);
-
-  function addClient(c) {
-    setClients(cs => [...cs, { ...c, id:genId() }]);
-    setNewClient(false);
-  }
-  function updateClient(c) {
-    setClients(cs => cs.map(x => x.id===c.id ? c : x));
-    setEditing(null);
-  }
-  function deleteClient(id) {
-    if (confirm("Eliminare questo cliente?")) setClients(cs => cs.filter(x=>x.id!==id));
-  }
-
-  return (
-    <div style={{ padding:32 }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
-        <h1 style={{ fontSize:24, fontWeight:700, color:"#f1f5f9", margin:0 }}>{lbl("clients_title","Clienti")}</h1>
-        <button onClick={()=>setNewClient(true)} style={{...btn, background:"#6366f1", color:"#fff", fontSize:14}}>+ Nuovo Cliente</button>
+function ClientsSection({clients,setClients,posts,lbl}){
+  const[editing,setEditing]=useState(null);const[newClient,setNewClient]=useState(false);
+  function save(c){if(editing)setClients(cs=>cs.map(x=>x.id===c.id?c:x));else setClients(cs=>[...cs,{...c,id:genId()}]);setEditing(null);setNewClient(false);}
+  function del(id){if(confirm("Eliminare questo cliente?"))setClients(cs=>cs.filter(x=>x.id!==id));}
+  return(
+    <div style={{padding:"28px 32px"}}>
+      <div className="section-header">
+        <h1 className="page-title">{lbl("clients_title","Clienti")}</h1>
+        <button className="btn btn-primary" onClick={()=>setNewClient(true)}>+ Nuovo Cliente</button>
       </div>
-
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))", gap:16 }}>
-        {clients.map(c => {
-          const clientPosts = posts.filter(p => p.clientId === c.id);
-          return (
-            <div key={c.id} style={{ background:"#1e293b", borderRadius:12, border:`2px solid ${c.color||"#334155"}`, overflow:"hidden" }}>
-              <div style={{ height:6, background:c.color||"#334155" }} />
-              <div style={{ padding:20 }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12 }}>
-                  <div>
-                    <div style={{ fontWeight:700, color:"#f1f5f9", fontSize:17 }}>{c.name}</div>
-                    {c.platform && <div style={{ fontSize:12, color:"#64748b", marginTop:2 }}>{c.platform}</div>}
-                  </div>
-                  <div style={{ display:"flex", gap:6 }}>
-                    <button onClick={()=>setEditing(c)} style={{...smallBtn, background:"#334155", color:"#e2e8f0"}}>✏️</button>
-                    <button onClick={()=>deleteClient(c.id)} style={{...smallBtn, background:"#7f1d1d", color:"#fca5a5"}}>🗑</button>
-                  </div>
-                </div>
-
-                {c.scheduleDays && c.scheduleDays.length > 0 && (
-                  <div style={{ marginBottom:12 }}>
-                    <div style={{ fontSize:11, color:"#64748b", marginBottom:5 }}>Giorni di uscita:</div>
-                    <div style={{ display:"flex", gap:4 }}>
-                      {DAYS_IT.map((d,i) => (
-                        <div key={i} style={{ width:26, height:26, borderRadius:6, fontSize:10, fontWeight:600,
-                          display:"flex", alignItems:"center", justifyContent:"center",
-                          background: c.scheduleDays.includes(i) ? c.color+"44" : "#0f172a",
-                          color: c.scheduleDays.includes(i) ? c.color : "#475569",
-                          border: c.scheduleDays.includes(i) ? `1px solid ${c.color}` : "1px solid #334155" }}>
-                          {d[0]}
-                        </div>
-                      ))}
+      {clients.length===0?<div className="empty-state card" style={{padding:48}}><div className="icon">👥</div><p>Nessun cliente ancora. Aggiungine uno!</p></div>:
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:16}}>
+          {clients.map(c=>{
+            const cp=posts.filter(p=>p.clientId===c.id);
+            return(
+              <div key={c.id} className="card" style={{overflow:"hidden"}}>
+                <div style={{height:5,background:c.color||"#ddd"}}/>
+                <div style={{padding:18}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+                    <div>
+                      <div style={{fontWeight:700,fontSize:16,color:"var(--text)"}}>{c.name}</div>
+                      {c.platform&&<div style={{fontSize:12,color:"var(--text3)",marginTop:2}}>{c.platform}</div>}
+                    </div>
+                    <div style={{display:"flex",gap:6}}>
+                      <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>setEditing(c)}>✏️</button>
+                      <button className="btn btn-danger btn-icon btn-sm" onClick={()=>del(c.id)}>🗑</button>
                     </div>
                   </div>
-                )}
-
-                <div style={{ display:"flex", gap:8, fontSize:12 }}>
-                  {POST_STATUSES.slice(0,4).map(s => {
-                    const cnt = clientPosts.filter(p=>p.status===s).length;
-                    const sc = STATUS_COLORS[s];
-                    return cnt > 0 ? (
-                      <div key={s} style={{ background:sc.bg+"22", color:sc.bg, padding:"2px 8px", borderRadius:20 }}>
-                        {cnt} {s}
+                  {c.scheduleDays?.length>0&&(
+                    <div style={{marginBottom:12}}>
+                      <div style={{fontSize:11,color:"var(--text3)",fontWeight:600,marginBottom:5,letterSpacing:".04em"}}>GIORNI DI USCITA</div>
+                      <div style={{display:"flex",gap:4}}>
+                        {DAYS_IT.map((d,i)=>(
+                          <div key={i} style={{width:27,height:27,borderRadius:7,fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",background:c.scheduleDays.includes(i)?c.color:"var(--surface2)",color:c.scheduleDays.includes(i)?"#fff":"var(--text3)",border:c.scheduleDays.includes(i)?"none":"1.5px solid var(--border)"}}>{d[0]}</div>
+                        ))}
                       </div>
-                    ) : null;
-                  })}
-                  {clientPosts.length === 0 && <span style={{ color:"#475569" }}>Nessun post</span>}
+                    </div>
+                  )}
+                  <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                    {POST_STATUSES.map(s=>{const cnt=cp.filter(p=>p.status===s).length;if(!cnt)return null;const sc=STATUS_COLORS[s];return(<span key={s} className="chip" style={{background:sc.light,color:sc.text,borderColor:sc.bg+"44",fontSize:11}}>{cnt} {s}</span>);})}
+                    {cp.length===0&&<span style={{fontSize:12,color:"var(--text3)"}}>Nessun post</span>}
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {(newClient || editing) && (
-        <ClientModal
-          client={editing}
-          onSave={editing ? updateClient : addClient}
-          onClose={()=>{setEditing(null);setNewClient(false);}}
-        />
-      )}
+            );
+          })}
+        </div>
+      }
+      {(newClient||editing)&&<ClientModal client={editing} onSave={save} onClose={()=>{setEditing(null);setNewClient(false);}}/>}
     </div>
   );
 }
 
-const smallBtn = { padding:"5px 8px", borderRadius:6, border:"none", cursor:"pointer", fontSize:12 };
-
-function ClientModal({ client, onSave, onClose }) {
-  const [form, setForm] = useState(client || { name:"", platform:"", color:PALETTE[0], scheduleDays:[], notes:"" });
-  function upd(k,v) { setForm(f=>({...f,[k]:v})); }
-  function toggleDay(d) {
-    setForm(f => ({ ...f, scheduleDays: f.scheduleDays?.includes(d)
-      ? f.scheduleDays.filter(x=>x!==d)
-      : [...(f.scheduleDays||[]),d] }));
-  }
-  return (
-    <div style={{ position:"fixed", inset:0, background:"#00000088", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
-      <div style={{ background:"#1e293b", borderRadius:16, width:"100%", maxWidth:500, border:"1px solid #334155" }}>
-        <div style={{ padding:"20px 24px", borderBottom:"1px solid #334155", display:"flex", justifyContent:"space-between" }}>
-          <h3 style={{ margin:0, color:"#f1f5f9" }}>{client ? "Modifica Cliente" : "Nuovo Cliente"}</h3>
-          <button onClick={onClose} style={{ background:"none", border:"none", color:"#64748b", cursor:"pointer", fontSize:20 }}>✕</button>
+function ClientModal({client,onSave,onClose}){
+  const[form,setForm]=useState(client||{name:"",platform:"",color:PALETTE[4],scheduleDays:[],notes:""});
+  function upd(k,v){setForm(f=>({...f,[k]:v}));}
+  function toggleDay(d){setForm(f=>({...f,scheduleDays:f.scheduleDays?.includes(d)?f.scheduleDays.filter(x=>x!==d):[...(f.scheduleDays||[]),d]}));}
+  return(
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal">
+        <div style={{padding:"18px 22px",borderBottom:"1.5px solid var(--border)",display:"flex",justifyContent:"space-between"}}>
+          <div style={{fontWeight:700,fontSize:16}}>{client?"Modifica Cliente":"Nuovo Cliente"}</div>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
         </div>
-        <div style={{ padding:24, display:"flex", flexDirection:"column", gap:14 }}>
-          <Field label="Nome Cliente">
-            <input value={form.name} onChange={e=>upd("name",e.target.value)} style={input} placeholder="es. Gymmi's" />
-          </Field>
-          <Field label="Piattaforme">
-            <input value={form.platform} onChange={e=>upd("platform",e.target.value)} style={input} placeholder="Instagram, Facebook..." />
-          </Field>
-          <Field label="Colore">
-            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-              {PALETTE.map(c => (
-                <button key={c} onClick={()=>upd("color",c)}
-                  style={{ width:26, height:26, borderRadius:6, background:c, border:form.color===c?"3px solid #fff":"2px solid transparent", cursor:"pointer" }} />
+        <div style={{padding:22,display:"flex",flexDirection:"column",gap:15}}>
+          <div className="field"><label className="label">Nome Cliente</label><input className="input" value={form.name} onChange={e=>upd("name",e.target.value)} placeholder="es. Gymmi's"/></div>
+          <div className="field"><label className="label">Piattaforme</label><input className="input" value={form.platform} onChange={e=>upd("platform",e.target.value)} placeholder="es. Instagram, Facebook, TikTok"/></div>
+          <div className="field">
+            <label className="label">Colore Brand</label>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
+              {PALETTE.map(c=>(
+                <button key={c} onClick={()=>upd("color",c)} style={{width:26,height:26,borderRadius:7,background:c,border:"none",cursor:"pointer",outline:form.color===c?`3px solid ${c}`:"3px solid transparent",outlineOffset:2,transition:"var(--transition)",transform:form.color===c?"scale(1.15)":"scale(1)"}}/>
               ))}
             </div>
-            <div style={{ marginTop:8, display:"flex", alignItems:"center", gap:8 }}>
-              <div style={{ width:20, height:20, borderRadius:4, background:form.color }} />
-              <span style={{ fontSize:12, color:"#94a3b8" }}>Colore selezionato: {form.color}</span>
+            <div style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:"var(--text2)"}}>
+              <div style={{width:18,height:18,borderRadius:5,background:form.color}}/> Colore selezionato
             </div>
-          </Field>
-          <Field label="Giorni di uscita contenuto">
-            <div style={{ display:"flex", gap:6 }}>
-              {DAYS_IT.map((d,i) => (
-                <button key={i} onClick={()=>toggleDay(i)}
-                  style={{ width:36, height:36, borderRadius:8, fontSize:11, fontWeight:600, cursor:"pointer", border:"none",
-                    background: form.scheduleDays?.includes(i) ? form.color : "#0f172a",
-                    color: form.scheduleDays?.includes(i) ? "#fff" : "#64748b" }}>
-                  {d}
-                </button>
+          </div>
+          <div className="field">
+            <label className="label">Giorni di uscita contenuto</label>
+            <div style={{display:"flex",gap:6}}>
+              {DAYS_IT.map((d,i)=>(
+                <button key={i} onClick={()=>toggleDay(i)} style={{width:36,height:36,borderRadius:9,fontSize:11.5,fontWeight:700,cursor:"pointer",border:"none",transition:"var(--transition)",background:form.scheduleDays?.includes(i)?form.color:"var(--surface2)",color:form.scheduleDays?.includes(i)?"#fff":"var(--text3)",transform:form.scheduleDays?.includes(i)?"scale(1.05)":"scale(1)"}}>{d}</button>
               ))}
             </div>
-          </Field>
-          <Field label="Note">
-            <textarea value={form.notes} onChange={e=>upd("notes",e.target.value)} style={{...input, minHeight:60, resize:"vertical"}} placeholder="Note sul cliente..." />
-          </Field>
-          <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
-            <button onClick={onClose} style={{...btn, background:"#334155", color:"#94a3b8"}}>Annulla</button>
-            <button onClick={()=>onSave(form)} style={{...btn, background:"#6366f1", color:"#fff"}} disabled={!form.name}>Salva</button>
+          </div>
+          <div className="field"><label className="label">Note</label><textarea className="input" value={form.notes} onChange={e=>upd("notes",e.target.value)} placeholder="Note sul cliente…" style={{minHeight:56,resize:"vertical"}}/></div>
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+            <button className="btn btn-ghost" onClick={onClose}>Annulla</button>
+            <button className="btn btn-primary" onClick={()=>onSave(form)} disabled={!form.name}>Salva Cliente</button>
           </div>
         </div>
       </div>
@@ -890,126 +642,93 @@ function ClientModal({ client, onSave, onClose }) {
   );
 }
 
-// ─── SETTINGS ────────────────────────────────────────────────────────────────
-function Settings({ users, setUsers, lbl, setLbl, currentUser }) {
-  const [tab, setTab] = useState("users");
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("editor");
-  const [inviteName, setInviteName] = useState("");
-  const [invitePw, setInvitePw] = useState("");
-  const [inviteMsg, setInviteMsg] = useState("");
-  const [editingLabel, setEditingLabel] = useState(null);
-
-  const labelKeys = [
-    ["app_name","Nome App","📣 SocialCal"],
-    ["nav_dashboard","Dashboard","Dashboard"],
-    ["nav_calendar","Calendario","Calendario"],
-    ["nav_posts","Post","Post"],
-    ["nav_clients","Clienti","Clienti"],
-    ["nav_settings","Impostazioni","Impostazioni"],
-    ["dash_title","Titolo Dashboard","Dashboard"],
-    ["cal_title","Titolo Calendario","Calendario Editoriale"],
-    ["posts_title","Titolo Post","Post"],
-    ["clients_title","Titolo Clienti","Clienti"],
+function Settings({users,setUsers,lbl,setLbl,currentUser}){
+  const[tab,setTab]=useState("users");
+  const[form,setForm]=useState({name:"",email:"",pw:"",role:"editor"});
+  const[msg,setMsg]=useState("");
+  const[editingLabel,setEditingLabel]=useState(null);
+  const labelKeys=[
+    ["app_name","Nome App","SocialCal"],["nav_dashboard","Menu: Dashboard","Dashboard"],
+    ["nav_calendar","Menu: Calendario","Calendario"],["nav_posts","Menu: Post","Post"],
+    ["nav_clients","Menu: Clienti","Clienti"],["nav_settings","Menu: Impostazioni","Impostazioni"],
+    ["dash_title","Titolo Dashboard","Dashboard"],["cal_title","Titolo Calendario","Calendario Editoriale"],
+    ["posts_title","Titolo Post","Post"],["clients_title","Titolo Clienti","Clienti"],
   ];
-
-  function inviteUser() {
-    if (!inviteEmail || !inviteName || !invitePw) { setInviteMsg("Compila tutti i campi"); return; }
-    if (users.find(u=>u.email===inviteEmail)) { setInviteMsg("Email già registrata"); return; }
-    const newUser = { id:genId(), name:inviteName, email:inviteEmail, password:invitePw, role:inviteRole, avatar:inviteName[0].toUpperCase() };
-    setUsers(us => [...us, newUser]);
-    setInviteMsg("Utente aggiunto! (Invita via mail: " + inviteEmail + ")");
-    setInviteEmail(""); setInviteName(""); setInvitePw("");
+  function invite(){
+    if(!form.name||!form.email||!form.pw)return setMsg("⚠️ Compila tutti i campi");
+    if(users.find(u=>u.email===form.email))return setMsg("⚠️ Email già registrata");
+    setUsers(us=>[...us,{id:genId(),...form,password:form.pw,avatar:form.name[0].toUpperCase()}]);
+    setMsg("✅ Utente aggiunto!");setForm({name:"",email:"",pw:"",role:"editor"});
   }
-
-  function deleteUser(id) {
-    if (id === currentUser) return;
-    if (confirm("Eliminare questo utente?")) setUsers(us => us.filter(u=>u.id!==id));
-  }
-
-  const tabs = [
-    { id:"users", label:"Utenti" },
-    { id:"labels", label:"Rinomina Etichette" },
-  ];
-
-  return (
-    <div style={{ padding:32 }}>
-      <h1 style={{ fontSize:24, fontWeight:700, color:"#f1f5f9", marginBottom:24 }}>Impostazioni</h1>
-      <div style={{ display:"flex", gap:8, marginBottom:24 }}>
-        {tabs.map(t => (
-          <button key={t.id} onClick={()=>setTab(t.id)}
-            style={{...btn, background:tab===t.id?"#6366f1":"#1e293b", color:tab===t.id?"#fff":"#94a3b8", border:"1px solid #334155"}}>
-            {t.label}
-          </button>
-        ))}
+  function changeRole(id,role){setUsers(us=>us.map(u=>u.id===id?{...u,role}:u));}
+  function deleteUser(id){if(confirm("Eliminare questo utente?"))setUsers(us=>us.filter(u=>u.id!==id));}
+  return(
+    <div style={{padding:"28px 32px",maxWidth:860}}>
+      <h1 className="page-title" style={{marginBottom:24}}>Impostazioni</h1>
+      <div className="pill-tabs" style={{marginBottom:24,display:"inline-flex"}}>
+        <button className={"pill-tab"+(tab==="users"?" active":"")} onClick={()=>setTab("users")}>👥 Utenti</button>
+        <button className={"pill-tab"+(tab==="labels"?" active":"")} onClick={()=>setTab("labels")}>✏️ Rinomina</button>
       </div>
-
-      {tab === "users" && (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:24 }}>
-          {/* Users list */}
+      {tab==="users"&&(
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24}}>
           <div>
-            <h3 style={{ color:"#f1f5f9", marginBottom:16, fontSize:16 }}>Utenti Registrati</h3>
-            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-              {users.map(u => (
-                <div key={u.id} style={{ background:"#1e293b", borderRadius:10, padding:"14px 16px",
-                  border:"1px solid #334155", display:"flex", alignItems:"center", gap:12 }}>
-                  <div style={{ width:38, height:38, borderRadius:"50%", background:"#6366f1",
-                    display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, color:"#fff", fontSize:14 }}>
-                    {u.avatar||u.name[0]}
+            <div style={{fontWeight:600,fontSize:15,marginBottom:14}}>Utenti Registrati</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {users.map(u=>(
+                <div key={u.id} className="card" style={{padding:"12px 16px",display:"flex",alignItems:"center",gap:12}}>
+                  <div style={{width:36,height:36,borderRadius:"50%",background:"var(--accentbg)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,color:"var(--accent)",fontSize:13,flexShrink:0}}>{u.avatar||u.name?.[0]}</div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:600,fontSize:13.5,color:"var(--text)"}}>{u.name}</div>
+                    <div style={{fontSize:12,color:"var(--text3)"}}>{u.email}</div>
                   </div>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontWeight:600, color:"#f1f5f9", fontSize:14 }}>{u.name}</div>
-                    <div style={{ fontSize:12, color:"#64748b" }}>{u.email}</div>
-                  </div>
-                  <RoleBadge role={u.role} />
-                  {u.id !== currentUser && (
-                    <button onClick={()=>deleteUser(u.id)} style={{...smallBtn, background:"#7f1d1d", color:"#fca5a5"}}>🗑</button>
-                  )}
+                  {u.id!==currentUser?(
+                    <select value={u.role} onChange={e=>changeRole(u.id,e.target.value)} className="input" style={{width:110,fontSize:12,padding:"5px 8px"}}>
+                      <option value="editor">Editor</option><option value="viewer">Viewer</option>
+                    </select>
+                  ):<span className="chip" style={{background:"var(--accentbg)",color:"var(--accent)",borderColor:"var(--accent)44"}}>Admin</span>}
+                  {u.id!==currentUser&&<button className="btn btn-danger btn-icon btn-sm" onClick={()=>deleteUser(u.id)}>🗑</button>}
                 </div>
               ))}
             </div>
           </div>
-
-          {/* Invite */}
           <div>
-            <h3 style={{ color:"#f1f5f9", marginBottom:16, fontSize:16 }}>Invita Utente</h3>
-            <div style={{ background:"#1e293b", borderRadius:12, padding:20, border:"1px solid #334155", display:"flex", flexDirection:"column", gap:12 }}>
-              {inviteMsg && <div style={{ background:"#064e3b", color:"#6ee7b7", padding:"8px 12px", borderRadius:8, fontSize:13 }}>{inviteMsg}</div>}
-              <Field label="Nome"><input value={inviteName} onChange={e=>setInviteName(e.target.value)} style={input} placeholder="Nome utente" /></Field>
-              <Field label="Email"><input value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} style={input} placeholder="email@esempio.com" /></Field>
-              <Field label="Password temporanea"><input value={invitePw} onChange={e=>setInvitePw(e.target.value)} style={input} placeholder="Password" /></Field>
-              <Field label="Ruolo">
-                <select value={inviteRole} onChange={e=>setInviteRole(e.target.value)} style={input}>
-                  <option value="editor">Editor (può creare/modificare)</option>
-                  <option value="viewer">Viewer (solo lettura)</option>
-                </select>
-              </Field>
-              <button onClick={inviteUser} style={{...btn, background:"#6366f1", color:"#fff"}}>Invita Utente</button>
-              <div style={{ fontSize:11, color:"#475569" }}>⚠️ Solo l'admin può invitare utenti. L'invito via email è simulato — invia la password manualmente all'utente.</div>
+            <div style={{fontWeight:600,fontSize:15,marginBottom:14}}>Invita Utente</div>
+            <div className="card" style={{padding:20}}>
+              {msg&&<div style={{background:msg.startsWith("✅")?"var(--accentbg)":"var(--dangerbg)",color:msg.startsWith("✅")?"var(--accent)":"var(--danger)",padding:"9px 13px",borderRadius:8,fontSize:13,marginBottom:14,fontWeight:500}}>{msg}</div>}
+              <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                <div className="field"><label className="label">Nome</label><input className="input" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="Nome utente"/></div>
+                <div className="field"><label className="label">Email</label><input className="input" type="email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} placeholder="email@esempio.com"/></div>
+                <div className="field"><label className="label">Password temporanea</label><input className="input" value={form.pw} onChange={e=>setForm(f=>({...f,pw:e.target.value}))} placeholder="Minimo 6 caratteri"/></div>
+                <div className="field"><label className="label">Ruolo</label>
+                  <select className="input" value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))}>
+                    <option value="editor">Editor — può creare e modificare</option>
+                    <option value="viewer">Viewer — solo lettura</option>
+                  </select>
+                </div>
+                <button className="btn btn-primary" style={{width:"100%",marginTop:4}} onClick={invite}>Aggiungi Utente</button>
+                <p style={{fontSize:11.5,color:"var(--text3)",textAlign:"center"}}>Ricorda di comunicare le credenziali all'utente invitato.</p>
+              </div>
             </div>
           </div>
         </div>
       )}
-
-      {tab === "labels" && (
-        <div style={{ background:"#1e293b", borderRadius:12, padding:24, border:"1px solid #334155", maxWidth:600 }}>
-          <h3 style={{ color:"#f1f5f9", marginBottom:16, fontSize:16 }}>Rinomina Etichette</h3>
-          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-            {labelKeys.map(([key, desc, def]) => (
-              <div key={key} style={{ display:"flex", alignItems:"center", gap:12 }}>
-                <div style={{ width:160, fontSize:12, color:"#64748b" }}>{desc}</div>
-                {editingLabel === key ? (
-                  <div style={{ display:"flex", gap:6, flex:1 }}>
-                    <input defaultValue={lbl(key,def)} autoFocus style={{...input, flex:1}}
-                      id={`lbl_${key}`} onKeyDown={e=>{ if(e.key==="Enter") { setLbl(key,e.target.value); setEditingLabel(null); }}} />
-                    <button onClick={()=>{ const el=document.getElementById(`lbl_${key}`); setLbl(key,el.value); setEditingLabel(null); }}
-                      style={{...smallBtn, background:"#6366f1", color:"#fff"}}>✓</button>
-                    <button onClick={()=>setEditingLabel(null)} style={{...smallBtn, background:"#334155", color:"#94a3b8"}}>✕</button>
+      {tab==="labels"&&(
+        <div className="card" style={{padding:24,maxWidth:560}}>
+          <div style={{fontWeight:600,fontSize:15,marginBottom:16}}>Rinomina Etichette</div>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {labelKeys.map(([key,desc,def])=>(
+              <div key={key} style={{display:"flex",alignItems:"center",gap:12,padding:"8px 12px",background:"var(--surface2)",borderRadius:8}}>
+                <div style={{width:170,fontSize:12,color:"var(--text3)",fontWeight:500}}>{desc}</div>
+                {editingLabel===key?(
+                  <div style={{display:"flex",gap:6,flex:1}}>
+                    <input className="input" defaultValue={lbl(key,def)} autoFocus id={`lbl_${key}`} onKeyDown={e=>{if(e.key==="Enter"){setLbl(key,e.target.value);setEditingLabel(null);}}} style={{flex:1,padding:"6px 10px"}}/>
+                    <button className="btn btn-primary btn-sm" onClick={()=>{setLbl(key,document.getElementById(`lbl_${key}`).value);setEditingLabel(null);}}>✓</button>
+                    <button className="btn btn-ghost btn-sm" onClick={()=>setEditingLabel(null)}>✕</button>
                   </div>
-                ) : (
-                  <div style={{ display:"flex", alignItems:"center", gap:8, flex:1 }}>
-                    <span style={{ fontSize:14, color:"#e2e8f0" }}>{lbl(key,def)}</span>
-                    <button onClick={()=>setEditingLabel(key)} style={{...smallBtn, background:"#334155", color:"#94a3b8"}}>✏️</button>
+                ):(
+                  <div style={{display:"flex",alignItems:"center",gap:8,flex:1}}>
+                    <span style={{fontSize:14,fontWeight:500,color:"var(--text)"}}>{lbl(key,def)}</span>
+                    <button className="btn btn-ghost btn-sm btn-icon" onClick={()=>setEditingLabel(key)} style={{marginLeft:"auto",opacity:.6}}>✏️</button>
                   </div>
                 )}
               </div>
@@ -1019,10 +738,4 @@ function Settings({ users, setUsers, lbl, setLbl, currentUser }) {
       )}
     </div>
   );
-}
-
-function RoleBadge({ role }) {
-  const map = { admin:["#f59e0b","#78350f","Amministratore"], editor:["#6366f1","#312e81","Editor"], viewer:["#64748b","#1e293b","Viewer"] };
-  const [bg,,label] = map[role]||map.viewer;
-  return <span style={{ fontSize:11, background:bg+"33", color:bg, padding:"2px 10px", borderRadius:20, flexShrink:0 }}>{label}</span>;
 }
