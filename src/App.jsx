@@ -502,12 +502,12 @@ function CalendarView({ posts, setPosts, clients, lbl, memory, addMemory }) {
     const clientColor = cl?.color || "#94a3b8";
     return (
       <div className="cal-tag"
-        style={{ background:clientColor+"22", borderLeft:`3px solid ${clientColor}`, color:"var(--text)" }}
+        style={{ background:clientColor+"22", borderLeft:`3px solid ${clientColor}`, color:"var(--text)",
+          boxShadow:`0 3px 0 0 ${sc.bg}, 0 4px 6px ${sc.bg}33` }}
         onClick={e=>{e.stopPropagation();onClick();}}
         onMouseEnter={e=>setTooltip({post:p, x:e.clientX, y:e.clientY})}
         onMouseLeave={()=>setTooltip(null)}>
         <span style={{ overflow:"hidden", textOverflow:"ellipsis", flex:1, fontWeight:500 }}>{p.title||"Post"}</span>
-        <div style={{ width:6, height:6, borderRadius:"50%", background:sc.bg, flexShrink:0 }} title={p.status}/>
       </div>
     );
   }
