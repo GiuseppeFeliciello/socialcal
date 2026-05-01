@@ -171,7 +171,28 @@ function buildCSS(fontFamily, fontSize) {
     .vert-title-cell:hover .title-tt { display: block !important; }
     .empty-state svg { margin-bottom: 12px; opacity: .4; }
     .empty-state p { font-size: var(--fs); }
-  `;
+
+    /* ── RESPONSIVE MOBILE ── */
+    @media (max-width: 768px) {
+      .sidebar { display: none !important; }
+      .mob-nav-bar { display: flex !important; }
+      .main-content { padding-bottom: 64px !important; }
+      .section-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+      .page-title { font-size: var(--fs-lg) !important; }
+      .stat-grid { grid-template-columns: 1fr 1fr !important; }
+      .clients-grid { grid-template-columns: 1fr !important; }
+      .modal { max-width: 100% !important; margin: 0 !important; border-radius: 16px 16px 0 0 !important; max-height: 92vh !important; }
+      .modal-overlay { align-items: flex-end !important; padding: 0 !important; }
+      .vert-cols { grid-template-columns: 40px 90px 1fr 90px !important; }
+      .vert-social-cols { display: none !important; }
+      .vert-header-social { display: none !important; }
+      .post-row { flex-wrap: wrap; }
+    }
+    @media (min-width: 769px) {
+      .mob-nav-bar { display: none !important; }
+      .sidebar { display: flex !important; }
+    }
+  \`;
 }
 
 /* ─── APP ────────────────────────────────────────────────────────────────── */
@@ -264,7 +285,7 @@ export default function App() {
 
   return (
     <div style={{ display:"flex", height:"100vh", overflow:"hidden" }}>
-      <aside style={{ width:220, flexShrink:0, background:"#fff", borderRight:"1.5px solid var(--border)", display:"flex", flexDirection:"column", overflowY:"auto" }}>
+      <aside className="sidebar" style={{ width:220, flexShrink:0, background:"#fff", borderRight:"1.5px solid var(--border)", display:"flex", flexDirection:"column", overflowY:"auto" }}>
         <div style={{ padding:"20px 18px 15px", borderBottom:"1.5px solid var(--border)" }}>
           <div style={{ fontSize:"var(--fs-lg)", fontWeight:700, color:"var(--text)", display:"flex", alignItems:"center", gap:8 }}>
             <div style={{ background:"var(--accentbg)", borderRadius:8, padding:5, display:"flex" }}>
@@ -298,7 +319,7 @@ export default function App() {
         </div>
       </aside>
 
-      <main style={{ flex:1, overflowY:"auto", background:"var(--bg)" }}>
+      <main className="main-content" style={{ flex:1, overflowY:"auto", background:"var(--bg)", position:"relative" }}>
         {section==="dashboard" && <Dashboard posts={posts} clients={clients}
           onDeletePost={deletePost} lbl={lbl} />}
         {section==="calendar"  && <CalendarView posts={posts} clients={clients}
@@ -313,6 +334,23 @@ export default function App() {
             fontId={fontId} setFontId={setFontId} fontSizeId={fontSizeId} setFontSizeId={setFontSizeId} />
         )}
       </main>
+
+      {/* Mobile bottom nav */}
+      <nav className="mob-nav-bar" style={{
+        position:"fixed", bottom:0, left:0, right:0, zIndex:200,
+        background:"var(--surface)", borderTop:"1.5px solid var(--border)",
+        display:"flex", padding:"0 0 env(safe-area-inset-bottom,0)"
+      }}>
+        {nav.map(n => (
+          <button key={n.id} onClick={()=>setSection(n.id)}
+            style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+              padding:"10px 4px 8px", border:"none", cursor:"pointer", background:"transparent",
+              color: section===n.id ? "var(--accent)" : "var(--text3)", transition:"var(--transition)", gap:3 }}>
+            <Icon name={n.icon} size={20} color={section===n.id?"var(--accent)":"var(--text3)"}/>
+            <span style={{ fontSize:10, fontWeight:section===n.id?600:400, fontFamily:"var(--font)" }}>{n.label}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
@@ -415,7 +453,7 @@ function Dashboard({ posts, clients, onDeletePost, lbl }) {
         <div style={{ fontSize:"var(--fs-xs)", color:"var(--text3)" }}>{DAYS_IT[now.getDay()]}, {fmtDate(today())}</div>
       </div>
 
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:26 }}>
+      <div className="stat-grid" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:26 }}>
         {stats.map(s => (
           <div key={s.key} className={"stat-card"+(filter===s.key?" active":"")} onClick={()=>setFilter(filter===s.key?null:s.key)}>
             <div style={{ marginBottom:10 }}><Icon name={s.icon} size={20} color={s.color} /></div>
@@ -1010,8 +1048,11 @@ function PostsSection({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
 function ClientsSection({ clients, onSaveClient, onDeleteClient, posts, lbl }) {
   const [editing,   setEditing]   = useState(null);
   const [newClient, setNewClient] = useState(false);
+  const [viewPosts, setViewPosts] = useState(null);
+
   async function save(c) { await onSaveClient(c); setEditing(null); setNewClient(false); }
   async function del(id) { if(confirm("Eliminare questo cliente?")) await onDeleteClient(id); }
+
   return (
     <div style={{ padding:"28px 32px" }}>
       <div className="section-header">
@@ -1020,7 +1061,7 @@ function ClientsSection({ clients, onSaveClient, onDeleteClient, posts, lbl }) {
       </div>
       {clients.length===0
         ? <div className="empty-state card" style={{padding:48}}><Icon name="users" size={36}/><p>Nessun cliente ancora</p></div>
-        : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(290px,1fr))",gap:16}}>
+        : <div className="clients-grid" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(290px,1fr))",gap:16}}>
             {clients.map(c => {
               const cp = posts.filter(p=>p.clientId===c.id);
               return (
@@ -1048,7 +1089,21 @@ function ClientsSection({ clients, onSaveClient, onDeleteClient, posts, lbl }) {
                       </div>
                     )}
                     <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
-                      {POST_STATUSES.map(s=>{const cnt=cp.filter(p=>p.status===s).length;if(!cnt)return null;const sc=STATUS_COLORS[s];return(<span key={s} className="chip" style={{background:sc.light,color:sc.text,borderColor:sc.bg+"44"}}>{cnt} {s}</span>);})}
+                      {POST_STATUSES.map(s=>{
+                        const filtered=cp.filter(p=>p.status===s);
+                        if(!filtered.length) return null;
+                        const sc=STATUS_COLORS[s];
+                        return (
+                          <button key={s}
+                            onClick={()=>setViewPosts({clientName:c.name,clientColor:c.color,status:s,posts:filtered})}
+                            className="chip"
+                            style={{background:sc.light,color:sc.text,borderColor:sc.bg+"44",cursor:"pointer",transition:"var(--transition)"}}
+                            onMouseEnter={e=>{e.currentTarget.style.background=sc.bg;e.currentTarget.style.color="#fff";}}
+                            onMouseLeave={e=>{e.currentTarget.style.background=sc.light;e.currentTarget.style.color=sc.text;}}>
+                            {filtered.length} {s}
+                          </button>
+                        );
+                      })}
                       {cp.length===0 && <span style={{fontSize:"var(--fs-xs)",color:"var(--text3)"}}>Nessun post</span>}
                     </div>
                   </div>
@@ -1056,11 +1111,44 @@ function ClientsSection({ clients, onSaveClient, onDeleteClient, posts, lbl }) {
               );
             })}
           </div>}
+
       {(newClient||editing) && <ClientModal client={editing} onSave={save} onClose={()=>{setEditing(null);setNewClient(false);}}/>}
+
+      {viewPosts && (
+        <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&setViewPosts(null)}>
+          <div className="modal">
+            <div style={{padding:"16px 20px",borderBottom:"1.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+                  <div style={{width:10,height:10,borderRadius:"50%",background:viewPosts.clientColor}}/>
+                  <span style={{fontWeight:700,fontSize:"var(--fs)"}}>{viewPosts.clientName}</span>
+                </div>
+                <span className="chip" style={{background:STATUS_COLORS[viewPosts.status]?.light,color:STATUS_COLORS[viewPosts.status]?.text,borderColor:STATUS_COLORS[viewPosts.status]?.bg+"44"}}>
+                  {viewPosts.posts.length} post · {viewPosts.status}
+                </span>
+              </div>
+              <button className="btn btn-ghost btn-icon" onClick={()=>setViewPosts(null)}><Icon name="x" size={14}/></button>
+            </div>
+            <div style={{padding:16,display:"flex",flexDirection:"column",gap:8,maxHeight:"60vh",overflowY:"auto"}}>
+              {viewPosts.posts.sort((a,b)=>a.date?.localeCompare(b.date)).map(p=>{
+                const sc=STATUS_COLORS[p.status]||STATUS_COLORS["Da Editare"];
+                return(
+                  <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:"var(--radius2)",background:"var(--surface2)",border:"1.5px solid var(--border)"}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:600,fontSize:"var(--fs-sm)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.title||"Post senza titolo"}</div>
+                      <div style={{fontSize:"var(--fs-xs)",color:"var(--text3)",marginTop:2}}>{fmtDate(p.date)}{p.platform&&<> · {p.platform}</>}</div>
+                    </div>
+                    <span className="chip" style={{background:sc.light,color:sc.text,borderColor:sc.bg+"44",flexShrink:0}}>{p.status}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
 function ClientModal({ client, onSave, onClose }) {
   const [form, setForm] = useState(client || { name:"", platform:"", color:PALETTE[4], scheduleDays:[], notes:"" });
   function upd(k,v) { setForm(f=>({...f,[k]:v})); }
