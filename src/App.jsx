@@ -543,6 +543,13 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
   const scrollRef = useRef(null);
 
   useEffect(() => {
+    setTimeout(() => {
+      const el = scrollRef.current?.querySelector("[data-today]");
+      if (el) el.scrollIntoView({ block: "center" });
+    }, 120);
+  }, []);
+
+  useEffect(() => {
     function handleClick() { setOpenMenu(null); }
     document.addEventListener("click", handleClick);
     return () => document.removeEventListener("click", handleClick);
