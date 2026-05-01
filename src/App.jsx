@@ -536,7 +536,7 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
   const [month,       setMonth]       = useState(new Date().getMonth());
   const [weekStart,   setWeekStart]   = useState(() => { const d=new Date(); d.setDate(d.getDate()-d.getDay()); return d; });
   const [editPost,    setEditPost]    = useState(null);
-  const [newPostDate, setNewPostDate] = useState(null);
+  const [newPostData, setNewPostData] = useState(null); // {date, clientId?, clientName?}
   const [tooltip,     setTooltip]     = useState(null);
   const [editingTitle,setEditingTitle]= useState(null);
   const [openMenu,    setOpenMenu]    = useState(null); // {id, field, x, y}
@@ -672,7 +672,7 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
     if (dayPosts.length===0 && slots.length===0) return (
       <div data-today={isToday||undefined}
         style={{display:"grid",gridTemplateColumns:COLS,borderBottom:"1px solid var(--border)",minHeight:32,background:rowBg,cursor:"pointer",alignItems:"stretch"}}
-        onClick={()=>setNewPostDate(dateStr)}>
+        onClick={()=>setNewPostData({date:dateStr})}>
         <DayCell/>
         <div style={{gridColumn:"2/-1",display:"flex",alignItems:"center",padding:"0 10px",opacity:.3,fontSize:"var(--fs-xs)",color:"var(--text3)"}}>—</div>
       </div>
@@ -684,7 +684,7 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
         {slots.map((c,i) => (
           <div key={`slot_${c.id}`} data-today={isToday&&dayPosts.length===0&&i===0||undefined}
             style={{display:"grid",gridTemplateColumns:COLS,borderBottom:"0.5px solid var(--border)",minHeight:38,background:rowBg,cursor:"pointer",alignItems:"stretch"}}
-            onClick={()=>setNewPostDate(dateStr)}>
+            onClick={()=>setNewPostData({date:dateStr,clientId:c.id,clientName:c.name})}>
             {i===0 && dayPosts.length===0 ? <DayCell/> : <div style={{width:50,borderRight:"1px solid var(--border)",background:dayCellBg}}/>}
             {/* Slot tratteggiato — span colonne cliente+titolo */}
             <div style={{gridColumn:"2/4",borderRight:"1px solid var(--border)",padding:0,display:"flex",alignItems:"stretch"}}>
@@ -819,7 +819,7 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
           <button className="btn btn-ghost btn-sm" onClick={goToday} style={{display:"flex",alignItems:"center",gap:5}}>
             <Icon name="calendar" size={13}/> Oggi
           </button>
-          <button className="btn btn-primary btn-sm" onClick={()=>setNewPostDate(today())} style={{display:"flex",alignItems:"center",gap:5}}>
+          <button className="btn btn-primary btn-sm" onClick={()=>setNewPostData({date:today()})} style={{display:"flex",alignItems:"center",gap:5}}>
             <Icon name="plus" size={13}/> Nuovo Post
           </button>
         </div>
@@ -884,11 +884,11 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
             {weekDays.map((d,i)=>{
               const ds=isoDate(d.getFullYear(),d.getMonth(),d.getDate()),isToday=ds===today();
               return(
-                <div key={i} className={"cal-cell"+(isToday?" today":"")} style={{minHeight:200}} onClick={()=>setNewPostDate(ds)}>
+                <div key={i} className={"cal-cell"+(isToday?" today":"")} style={{minHeight:200}} onClick={()=>setNewPostData({date:ds})}>
                   {slotsFor(ds).map(c=>(
                     <div key={c.id} className="cal-tag"
                       style={{background:c.color+"15",border:`1px dashed ${c.color}99`,color:c.color}}
-                      onClick={e=>{e.stopPropagation();setNewPostDate(ds);}}>
+                      onClick={e=>{e.stopPropagation();setNewPostData({date:ds});}}>
                       <span style={{overflow:"hidden",textOverflow:"ellipsis",flex:1,fontWeight:500}}>{c.name}</span>
                     </div>
                   ))}
@@ -910,19 +910,28 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
         </div>
       )}
 
-      {(editPost||newPostDate)&&(
-        <PostModal post={editPost} defaultDate={newPostDate} clients={clients} memory={memory} addMemory={addMemory}
-          onSave={async p=>{if(!p.id)p={...p,id:genId()};await onSavePost(p);setEditPost(null);setNewPostDate(null);}}
+      {(editPost||newPostData)&&(
+        <PostModal post={editPost} defaultDate={newPostData?.date} defaultClientId={newPostData?.clientId} defaultClientName={newPostData?.clientName} clients={clients} memory={memory} addMemory={addMemory}
+          onSave={async p=>{if(!p.id)p={...p,id:genId()};await onSavePost(p);setEditPost(null);setNewPostData(null);}}
           onDelete={async id=>{await onDeletePost(id);setEditPost(null);}}
-          onClose={()=>{setEditPost(null);setNewPostDate(null);}}/>
+          onClose={()=>{setEditPost(null);setNewPostData(null);}}/>
       )}
     </div>
   );
 }
 
 
-function PostModal({ post, defaultDate, clients, memory, addMemory, onSave, onDelete, onClose }) {
-  const [form, setForm] = useState(post || { title:"", clientId:"", clientName:"", platform:"Instagram", date:defaultDate||today(), status:"Da Editare", caption:"", hashtags:"", firstComment:"", notes:"" });
+function PostModal({ post, defaultDate, defaultClientId, defaultClientName, clients, memory, addMemory, onSave, onDelete, onClose }) {
+  const defaultClient = clients.find(c=>c.id===defaultClientId);
+  const defaultPlatform = defaultClient?.platform?.toLowerCase().includes("tik") && defaultClient?.platform?.toLowerCase().includes("insta") && defaultClient?.platform?.toLowerCase().includes("face")
+    ? "Tutte"
+    : "Tutte";
+  const [form, setForm] = useState(post || {
+    title:"", clientId:defaultClientId||"", clientName:defaultClientName||"",
+    platform:"Tutte", date:defaultDate||today(), status:"Da Editare",
+    caption:"", hashtags:"", firstComment:"", notes:"",
+    igStatus:"—", fbStatus:"—", ttStatus:"—"
+  });
   function upd(k,v) { setForm(f=>({...f,[k]:v})); }
   async function save() {
     const cl = clients.find(c=>c.id===form.clientId);
