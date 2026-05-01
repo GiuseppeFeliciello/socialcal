@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useCollection } from "./useFirestore";
 
 /* ─── ICONS ──────────────────────────────────────────────────────────────── */
 const Icon = ({ name, size = 16, color = "currentColor" }) => {
@@ -172,20 +173,56 @@ function buildCSS(fontFamily, fontSize) {
 
 /* ─── APP ────────────────────────────────────────────────────────────────── */
 export default function App() {
-  const [users,       setUsers]       = useLS("scm_users",   []);
-  const [clients,     setClients]     = useLS("scm_clients", []);
-  const [posts,       setPosts]       = useLS("scm_posts",   []);
+  // Firestore collections — synced across all devices
+  const usersCol   = useCollection("users");
+  const clientsCol = useCollection("clients");
+  const postsCol   = useCollection("posts");
+  const labelsCol  = useCollection("labels");
+  const memoryCol  = useCollection("memory");
+
+  // Local-only state (per device)
   const [currentUser, setCurrentUser] = useLS("scm_current", null);
-  const [labels,      setLabels]      = useLS("scm_labels",  {});
-  const [memory,      setMemory]      = useLS("scm_memory",  { captions:[], hashtags:[], firstComments:[] });
   const [fontId,      setFontId]      = useLS("scm_font",    "outfit");
   const [fontSizeId,  setFontSizeId]  = useLS("scm_fsize",   "md");
   const [section, setSection] = useState("dashboard");
 
+  // Loading state
+  const loading = !usersCol.ready || !clientsCol.ready || !postsCol.ready;
+
+  // Derived data
+  const users   = usersCol.data   || [];
+  const clients = clientsCol.data || [];
+  const posts   = postsCol.data   || [];
+
+  // Labels: stored as single doc "config" in labels collection
+  const labelsDoc = (labelsCol.data || []).find(d => d.id === "config") || {};
+  function lbl(key, fb) { return labelsDoc[key] ?? fb; }
+  async function setLbl(key, val) {
+    await labelsCol.save({ ...labelsDoc, id: "config", [key]: val });
+  }
+
+  // Memory: stored as single doc "config" in memory collection
+  const memoryDoc = (memoryCol.data || []).find(d => d.id === "config") || { id:"config", captions:[], hashtags:[], firstComments:[] };
+  async function addMemory(type, val) {
+    if (!val?.trim()) return;
+    const updated = { ...memoryDoc, [type]: [...new Set([val, ...(memoryDoc[type] || [])])].slice(0, 30) };
+    await memoryCol.save(updated);
+  }
+
+  // Wrapped setters that sync to Firestore
+  async function saveUser(u)   { await usersCol.save(u); }
+  async function saveUsers(us) { for (const u of us) await usersCol.save(u); }
+  async function deleteUser(id){ await usersCol.remove(id); }
+
+  async function saveClient(c)  { await clientsCol.save(c); }
+  async function deleteClient(id){ await clientsCol.remove(id); }
+
+  async function savePost(p)   { await postsCol.save(p); }
+  async function deletePost(id){ await postsCol.remove(id); }
+
   const fontObj     = FONT_OPTIONS.find(f => f.id === fontId) || FONT_OPTIONS[0];
   const fontSizeObj = FONT_SIZES.find(f => f.id === fontSizeId) || FONT_SIZES[2];
 
-  // Inject font + CSS
   useEffect(() => {
     let link = document.getElementById("scm-font-link");
     if (!link) { link = document.createElement("link"); link.id = "scm-font-link"; link.rel = "stylesheet"; document.head.appendChild(link); }
@@ -198,18 +235,21 @@ export default function App() {
     style.textContent = buildCSS(fontObj.label, fontSizeObj.base);
   }, [fontObj, fontSizeObj]);
 
+  if (loading) return (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"var(--bg)", flexDirection:"column", gap:16 }}>
+      <div style={{ width:40, height:40, border:"3px solid var(--border)", borderTop:"3px solid var(--accent)", borderRadius:"50%", animation:"spin 0.8s linear infinite" }}/>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <div style={{ fontSize:"var(--fs-sm)", color:"var(--text3)" }}>Caricamento...</div>
+    </div>
+  );
+
   const user    = users.find(u => u.id === currentUser);
   const isAdmin = user?.role === "admin";
 
-  function lbl(key, fb)   { return labels[key] ?? fb; }
-  function setLbl(key, v) { setLabels(l => ({ ...l, [key]: v })); }
-  function addMemory(type, val) {
-    if (!val?.trim()) return;
-    setMemory(m => ({ ...m, [type]: [...new Set([val, ...(m[type] || [])])].slice(0, 30) }));
-  }
-
-  if (users.length === 0) return <SetupAdmin onDone={u => { setUsers([u]); setCurrentUser(u.id); }} />;
-  if (!user)              return <Login users={users} onLogin={id => setCurrentUser(id)} />;
+  if (users.length === 0) return (
+    <SetupAdmin onDone={async u => { await saveUser(u); setCurrentUser(u.id); }} />
+  );
+  if (!user) return <Login users={users} onLogin={id => setCurrentUser(id)} />;
 
   const nav = [
     { id: "dashboard", icon: "grid",     label: lbl("nav_dashboard", "Dashboard") },
@@ -256,12 +296,17 @@ export default function App() {
       </aside>
 
       <main style={{ flex:1, overflowY:"auto", background:"var(--bg)" }}>
-        {section==="dashboard" && <Dashboard posts={posts} clients={clients} setPosts={setPosts} lbl={lbl} />}
-        {section==="calendar"  && <CalendarView posts={posts} setPosts={setPosts} clients={clients} lbl={lbl} memory={memory} addMemory={addMemory} />}
-        {section==="posts"     && <PostsSection posts={posts} setPosts={setPosts} clients={clients} lbl={lbl} memory={memory} addMemory={addMemory} user={user} />}
-        {section==="clients"   && <ClientsSection clients={clients} setClients={setClients} posts={posts} lbl={lbl} />}
+        {section==="dashboard" && <Dashboard posts={posts} clients={clients}
+          onDeletePost={deletePost} lbl={lbl} />}
+        {section==="calendar"  && <CalendarView posts={posts} clients={clients}
+          onSavePost={savePost} onDeletePost={deletePost} lbl={lbl} memory={memoryDoc} addMemory={addMemory} />}
+        {section==="posts"     && <PostsSection posts={posts} clients={clients}
+          onSavePost={savePost} onDeletePost={deletePost} lbl={lbl} memory={memoryDoc} addMemory={addMemory} user={user} />}
+        {section==="clients"   && <ClientsSection clients={clients}
+          onSaveClient={saveClient} onDeleteClient={deleteClient} posts={posts} lbl={lbl} />}
         {section==="settings"  && isAdmin && (
-          <Settings users={users} setUsers={setUsers} lbl={lbl} setLbl={setLbl} currentUser={currentUser}
+          <Settings users={users} onSaveUser={saveUser} onDeleteUser={deleteUser}
+            lbl={lbl} setLbl={setLbl} currentUser={currentUser}
             fontId={fontId} setFontId={setFontId} fontSizeId={fontSizeId} setFontSizeId={setFontSizeId} />
         )}
       </main>
@@ -337,7 +382,7 @@ function Login({ users, onLogin }) {
 }
 
 /* ─── DASHBOARD ──────────────────────────────────────────────────────────── */
-function Dashboard({ posts, clients, setPosts, lbl }) {
+function Dashboard({ posts, clients, onDeletePost, lbl }) {
   const now = new Date();
   const mk  = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
   const thisMonth  = posts.filter(p => p.date?.startsWith(mk));
@@ -388,7 +433,7 @@ function Dashboard({ posts, clients, setPosts, lbl }) {
           </div>
           {filtered.length===0
             ? <EmptyState icon="fileText" text="Nessun post trovato"/>
-            : <div style={{display:"flex",flexDirection:"column",gap:6}}>{filtered.map(p=><PostRowComp key={p.id} post={p} clients={clients} setPosts={setPosts}/>)}</div>}
+            : <div style={{display:"flex",flexDirection:"column",gap:6}}>{filtered.map(p=><PostRowComp key={p.id} post={p} clients={clients} onDeletePost={onDeletePost}/>)}</div>}
         </div>
       )}
 
@@ -415,14 +460,14 @@ function Dashboard({ posts, clients, setPosts, lbl }) {
           <div style={{ fontWeight:600, fontSize:"var(--fs)", marginBottom:13 }}>Prossimi Post</div>
           {upcoming.length===0
             ? <EmptyState icon="calendar" text="Nessun post in programma"/>
-            : <div style={{display:"flex",flexDirection:"column",gap:6}}>{upcoming.map(p=><PostRowComp key={p.id} post={p} clients={clients} setPosts={setPosts} compact/>)}</div>}
+            : <div style={{display:"flex",flexDirection:"column",gap:6}}>{upcoming.map(p=><PostRowComp key={p.id} post={p} clients={clients} onDeletePost={onDeletePost} compact/>)}</div>}
         </div>
       </div>
     </div>
   );
 }
 
-function PostRowComp({ post, clients, setPosts, compact }) {
+function PostRowComp({ post, clients, onDeletePost, compact }) {
   const sc = STATUS_COLORS[post.status] || STATUS_COLORS["Da Editare"];
   const cl = clients?.find(c => c.id === post.clientId);
   return (
@@ -436,7 +481,7 @@ function PostRowComp({ post, clients, setPosts, compact }) {
       </div>
       <span className="chip" style={{ background:sc.light, color:sc.text, borderColor:sc.bg+"44", flexShrink:0 }}>{post.status}</span>
       <button className="btn btn-icon btn-danger" style={{ flexShrink:0, opacity:.65 }}
-        onClick={e=>{e.stopPropagation();setPosts(ps=>ps.filter(x=>x.id!==post.id));}}>
+        onClick={e=>{e.stopPropagation();onDeletePost(post.id);}}>
         <Icon name="trash" size={13}/>
       </button>
     </div>
@@ -444,7 +489,7 @@ function PostRowComp({ post, clients, setPosts, compact }) {
 }
 
 /* ─── CALENDAR ───────────────────────────────────────────────────────────── */
-function CalendarView({ posts, setPosts, clients, lbl, memory, addMemory }) {
+function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, addMemory }) {
   const [view,      setView]      = useState("month");
   const [year,      setYear]      = useState(new Date().getFullYear());
   const [month,     setMonth]     = useState(new Date().getMonth());
@@ -612,8 +657,8 @@ function CalendarView({ posts, setPosts, clients, lbl, memory, addMemory }) {
 
       {(editPost||newPostDate) && (
         <PostModal post={editPost} defaultDate={newPostDate} clients={clients} memory={memory} addMemory={addMemory}
-          onSave={p => { if(editPost)setPosts(ps=>ps.map(x=>x.id===p.id?p:x));else setPosts(ps=>[...ps,{...p,id:genId()}]); setEditPost(null); setNewPostDate(null); }}
-          onDelete={id => { setPosts(ps=>ps.filter(x=>x.id!==id)); setEditPost(null); }}
+          onSave={async p => { if(!p.id)p={...p,id:genId()}; await onSavePost(p); setEditPost(null); setNewPostDate(null); }}
+          onDelete={async id => { await onDeletePost(id); setEditPost(null); }}
           onClose={() => { setEditPost(null); setNewPostDate(null); }}/>
       )}
     </div>
@@ -680,7 +725,7 @@ function PostModal({ post, defaultDate, clients, memory, addMemory, onSave, onDe
 }
 
 /* ─── POSTS SECTION ──────────────────────────────────────────────────────── */
-function PostsSection({ posts, setPosts, clients, lbl, memory, addMemory, user }) {
+function PostsSection({ posts, clients, onSavePost, onDeletePost, lbl, memory, addMemory, user }) {
   const [editPost,      setEditPost]      = useState(null);
   const [newPost,       setNewPost]       = useState(false);
   const [filterStatus,  setFilterStatus]  = useState("");
@@ -729,15 +774,15 @@ function PostsSection({ posts, setPosts, clients, lbl, memory, addMemory, user }
                     <div style={{ fontSize:"var(--fs-xs)", color:"var(--text3)", marginTop:1 }}>{p.clientName||"—"} · {fmtDate(p.date)} · {p.platform}</div>
                   </div>
                   <span className="chip" style={{ background:sc.light, color:sc.text, borderColor:sc.bg+"55" }}>{p.status}</span>
-                  {canEdit && <button className="btn btn-icon btn-danger" style={{opacity:.65}} onClick={e=>{e.stopPropagation();setPosts(ps=>ps.filter(x=>x.id!==p.id));}}><Icon name="trash" size={13}/></button>}
+                  {canEdit && <button className="btn btn-icon btn-danger" style={{opacity:.65}} onClick={e=>{e.stopPropagation();onDeletePost(p.id);}}><Icon name="trash" size={13}/></button>}
                 </div>
               );
             })}
           </div>}
       {(editPost||newPost) && (
         <PostModal post={editPost||undefined} defaultDate={today()} clients={clients} memory={memory} addMemory={addMemory}
-          onSave={p=>{if(editPost)setPosts(ps=>ps.map(x=>x.id===p.id?p:x));else setPosts(ps=>[...ps,{...p,id:genId()}]);setEditPost(null);setNewPost(false);}}
-          onDelete={id=>{setPosts(ps=>ps.filter(x=>x.id!==id));setEditPost(null);}}
+          onSave={async p=>{if(!p.id)p={...p,id:genId()};await onSavePost(p);setEditPost(null);setNewPost(false);}}
+          onDelete={async id=>{await onDeletePost(id);setEditPost(null);}}
           onClose={()=>{setEditPost(null);setNewPost(false);}}/>
       )}
     </div>
@@ -745,11 +790,11 @@ function PostsSection({ posts, setPosts, clients, lbl, memory, addMemory, user }
 }
 
 /* ─── CLIENTS ────────────────────────────────────────────────────────────── */
-function ClientsSection({ clients, setClients, posts, lbl }) {
+function ClientsSection({ clients, onSaveClient, onDeleteClient, posts, lbl }) {
   const [editing,   setEditing]   = useState(null);
   const [newClient, setNewClient] = useState(false);
-  function save(c) { if(editing)setClients(cs=>cs.map(x=>x.id===c.id?c:x));else setClients(cs=>[...cs,{...c,id:genId()}]); setEditing(null); setNewClient(false); }
-  function del(id) { if(confirm("Eliminare questo cliente?"))setClients(cs=>cs.filter(x=>x.id!==id)); }
+  async function save(c) { await onSaveClient(c); setEditing(null); setNewClient(false); }
+  async function del(id) { if(confirm("Eliminare questo cliente?")) await onDeleteClient(id); }
   return (
     <div style={{ padding:"28px 32px" }}>
       <div className="section-header">
@@ -833,7 +878,7 @@ function ClientModal({ client, onSave, onClose }) {
           <MField label="Note"><textarea className="input" value={form.notes} onChange={e=>upd("notes",e.target.value)} placeholder="Note sul cliente…" style={{ minHeight:52, resize:"vertical" }}/></MField>
           <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
             <button className="btn btn-ghost" onClick={onClose}>Annulla</button>
-            <button className="btn btn-primary" onClick={()=>onSave(form)} disabled={!form.name}><Icon name="check" size={14}/> Salva</button>
+            <button className="btn btn-primary" onClick={()=>onSave(form.id?form:{...form,id:genId()})} disabled={!form.name}><Icon name="check" size={14}/> Salva</button>
           </div>
         </div>
       </div>
@@ -842,7 +887,7 @@ function ClientModal({ client, onSave, onClose }) {
 }
 
 /* ─── SETTINGS ───────────────────────────────────────────────────────────── */
-function Settings({ users, setUsers, lbl, setLbl, currentUser, fontId, setFontId, fontSizeId, setFontSizeId }) {
+function Settings({ users, onSaveUser, onDeleteUser, lbl, setLbl, currentUser, fontId, setFontId, fontSizeId, setFontSizeId }) {
   const [tab,  setTab]  = useState("users");
   const [form, setForm] = useState({ name:"", email:"", pw:"", role:"editor" });
   const [msg,  setMsg]  = useState("");
@@ -859,11 +904,11 @@ function Settings({ users, setUsers, lbl, setLbl, currentUser, fontId, setFontId
   function invite() {
     if (!form.name||!form.email||!form.pw) return setMsg("⚠️ Compila tutti i campi");
     if (users.find(u=>u.email===form.email)) return setMsg("⚠️ Email già registrata");
-    setUsers(us=>[...us,{id:genId(),...form,password:form.pw,avatar:form.name[0].toUpperCase()}]);
+    await onSaveUser({id:genId(),...form,password:form.pw,avatar:form.name[0].toUpperCase()});
     setMsg("✅ Utente aggiunto!"); setForm({name:"",email:"",pw:"",role:"editor"});
   }
-  function changeRole(id,role) { setUsers(us=>us.map(u=>u.id===id?{...u,role}:u)); }
-  function deleteUser(id) { if(confirm("Eliminare questo utente?"))setUsers(us=>us.filter(u=>u.id!==id)); }
+  async function changeRole(id,role) { const u=users.find(x=>x.id===id); if(u) await onSaveUser({...u,role}); }
+  async function deleteUser(id) { if(confirm("Eliminare questo utente?")) await onDeleteUser(id); }
 
   const tabs = [
     { id:"users",     icon:"users",   label:"Utenti" },
