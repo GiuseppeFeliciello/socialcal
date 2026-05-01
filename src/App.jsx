@@ -497,184 +497,411 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
   const [editPost,    setEditPost]    = useState(null);
   const [newPostDate, setNewPostDate] = useState(null);
   const [tooltip,     setTooltip]     = useState(null);
+  const [editingTitle, setEditingTitle] = useState(null); // postId being inline-edited
+  const scrollRef = useRef(null);
 
   function prev() {
     if (view==="month") { month===0?(setMonth(11),setYear(y=>y-1)):setMonth(m=>m-1); }
-    else { const d=new Date(weekStart); d.setDate(d.getDate()-7); setWeekStart(d); }
+    else if (view==="week") { const d=new Date(weekStart); d.setDate(d.getDate()-7); setWeekStart(d); }
   }
   function next() {
     if (view==="month") { month===11?(setMonth(0),setYear(y=>y+1)):setMonth(m=>m+1); }
-    else { const d=new Date(weekStart); d.setDate(d.getDate()+7); setWeekStart(d); }
+    else if (view==="week") { const d=new Date(weekStart); d.setDate(d.getDate()+7); setWeekStart(d); }
+  }
+  function goToday() {
+    const n = new Date();
+    setYear(n.getFullYear()); setMonth(n.getMonth());
+    if (view === "vertical" && scrollRef.current) {
+      const el = scrollRef.current.querySelector("[data-today]");
+      if (el) el.scrollIntoView({ behavior:"smooth", block:"center" });
+    }
   }
 
-  // Build month grid including prev/next month overflow
+  // Month grid cells
   function buildMonthCells() {
     const firstDow = new Date(year, month, 1).getDay();
     const daysThis = new Date(year, month+1, 0).getDate();
     const daysPrev = new Date(year, month, 0).getDate();
     const cells = [];
-    // prev month tail
-    for (let i = firstDow - 1; i >= 0; i--) {
-      const d = daysPrev - i;
-      const pm = month===0?11:month-1; const py = month===0?year-1:year;
-      cells.push({ day:d, dateStr:isoDate(py,pm,d), otherMonth:true });
-    }
-    // current month
-    for (let d=1; d<=daysThis; d++) cells.push({ day:d, dateStr:isoDate(year,month,d), otherMonth:false });
-    // next month head
-    const remaining = 42 - cells.length;
-    for (let d=1; d<=remaining; d++) {
-      const nm = month===11?0:month+1; const ny = month===11?year+1:year;
-      cells.push({ day:d, dateStr:isoDate(ny,nm,d), otherMonth:true });
-    }
+    for (let i=firstDow-1;i>=0;i--) { const d=daysPrev-i; const pm=month===0?11:month-1; const py=month===0?year-1:year; cells.push({day:d,dateStr:isoDate(py,pm,d),otherMonth:true}); }
+    for (let d=1;d<=daysThis;d++) cells.push({day:d,dateStr:isoDate(year,month,d),otherMonth:false});
+    const remaining=42-cells.length;
+    for (let d=1;d<=remaining;d++) { const nm=month===11?0:month+1; const ny=month===11?year+1:year; cells.push({day:d,dateStr:isoDate(ny,nm,d),otherMonth:true}); }
     return cells;
   }
 
-  const cells   = buildMonthCells();
+  // Vertical: build 60 days around today
+  function buildVerticalDays() {
+    const days = [];
+    const start = new Date(); start.setDate(start.getDate()-14);
+    for (let i=0;i<90;i++) {
+      const d = new Date(start); d.setDate(start.getDate()+i);
+      days.push(isoDate(d.getFullYear(), d.getMonth(), d.getDate()));
+    }
+    return days;
+  }
+
   const weekDays = Array.from({length:7}, (_,i) => { const d=new Date(weekStart); d.setDate(d.getDate()+i); return d; });
+  const cells    = buildMonthCells();
 
-  function postsFor(ds) { return posts.filter(p => p.date===ds); }
+  function postsFor(ds) { return posts.filter(p=>p.date===ds); }
   function slotsFor(ds) {
-    const d = new Date(ds+"T00:00:00"), dow = d.getDay();
-    return clients.filter(c => c.scheduleDays?.includes(dow) && !posts.find(p=>p.date===ds&&p.clientId===c.id));
+    const d=new Date(ds+"T00:00:00"), dow=d.getDay();
+    return clients.filter(c=>c.scheduleDays?.includes(dow)&&!posts.find(p=>p.date===ds&&p.clientId===c.id));
   }
 
-  const periodLabel = view==="month" ? `${MONTHS_IT[month]} ${year}` : `${fmtDate(weekDays[0])} – ${fmtDate(weekDays[6])}`;
+  const periodLabel = view==="month" ? `${MONTHS_IT[month]} ${year}` :
+                      view==="week"  ? `${fmtDate(weekDays[0])} – ${fmtDate(weekDays[6])}` : "Vista Verticale";
 
-  function CalTag({ p, onClick }) {
-    const sc = STATUS_COLORS[p.status] || STATUS_COLORS["Da Editare"];
-    const cl = clients.find(c=>c.id===p.clientId);
-    const clientColor = cl?.color || "#94a3b8";
+  // Inline status change
+  async function changeStatus(post, newStatus) {
+    await onSavePost({...post, status:newStatus});
+  }
+
+  // Inline title save
+  async function saveTitle(post, newTitle) {
+    await onSavePost({...post, title:newTitle});
+    setEditingTitle(null);
+  }
+
+  function CalTag({p, onClick}) {
+    const sc=STATUS_COLORS[p.status]||STATUS_COLORS["Da Editare"];
+    const cl=clients.find(c=>c.id===p.clientId);
+    const clientColor=cl?.color||"#94a3b8";
     return (
       <div className="cal-tag"
-        style={{ background:clientColor+"22", borderLeft:`3px solid ${clientColor}`, color:"var(--text)",
-          boxShadow:`0 3px 0 0 ${sc.bg}, 0 4px 6px ${sc.bg}33` }}
+        style={{background:clientColor+"22",borderLeft:`3px solid ${clientColor}`,color:"var(--text)",
+          boxShadow:`0 3px 0 0 ${sc.bg}, 0 4px 6px ${sc.bg}33`}}
         onClick={e=>{e.stopPropagation();onClick();}}
-        onMouseEnter={e=>setTooltip({post:p, x:e.clientX, y:e.clientY})}
+        onMouseEnter={e=>setTooltip({post:p,x:e.clientX,y:e.clientY})}
         onMouseLeave={()=>setTooltip(null)}>
-        <span style={{ overflow:"hidden", textOverflow:"ellipsis", flex:1, fontWeight:500 }}>{p.title||"Post"}</span>
+        <span style={{overflow:"hidden",textOverflow:"ellipsis",flex:1,fontWeight:500}}>{p.title||"Post"}</span>
       </div>
     );
   }
 
-  function SlotTag({ c, onClick }) {
+  function SlotTag({c, onClick}) {
     return (
-      <div className="cal-tag"
-        style={{ background:c.color+"15", border:`1px dashed ${c.color}66`, color:c.color }}
+      <div className="cal-tag" style={{background:c.color+"15",border:`1px dashed ${c.color}66`,color:c.color}}
         onClick={e=>{e.stopPropagation();onClick();}}>
-        <div style={{ width:5, height:5, borderRadius:"50%", background:c.color, flexShrink:0 }}/>
-        <span style={{ overflow:"hidden", textOverflow:"ellipsis", flex:1, fontWeight:500 }}>{c.name}</span>
+        <div style={{width:5,height:5,borderRadius:"50%",background:c.color,flexShrink:0}}/>
+        <span style={{overflow:"hidden",textOverflow:"ellipsis",flex:1,fontWeight:500}}>{c.name}</span>
       </div>
     );
   }
+
+  // Platform icons inline
+  function PlatIcons({platform}) {
+    const map = {
+      "Instagram": {color:"#9c27b0",bg:"#f3e5ff",icon:"instagram"},
+      "Facebook":  {color:"#1976d2",bg:"#e3f2fd",icon:"facebook"},
+      "TikTok":    {color:"#e91e63",bg:"#fce4ec",icon:"tiktok"},
+    };
+    const plats = platform==="Tutte" ? ["Instagram","Facebook","TikTok"] : [platform];
+    return (
+      <div style={{display:"flex",gap:4,alignItems:"center"}}>
+        {plats.map(p => {
+          const m=map[p]||{color:"#888",bg:"#eee",icon:"globe"};
+          return (
+            <div key={p} style={{width:20,height:20,borderRadius:5,background:m.bg,display:"flex",alignItems:"center",justifyContent:"center"}} title={p}>
+              <Icon name={m.icon} size={11} color={m.color}/>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Vertical calendar row
+  function VerticalDayRows({dateStr}) {
+    const dayPosts = postsFor(dateStr);
+    const slots    = slotsFor(dateStr);
+    const isToday  = dateStr===today();
+    const d        = new Date(dateStr+"T00:00:00");
+    const dow      = DAYS_IT[d.getDay()];
+    const dayNum   = d.getDate();
+    const isWeekend= d.getDay()===0||d.getDay()===6;
+    const rowCount = Math.max(dayPosts.length, slots.length, 1);
+    const bgRow    = isToday ? "#f0fdf4" : isWeekend ? "#fafaf9" : "var(--surface)";
+
+    // Day cell spans all rows
+    const dayCell = (
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+        padding:"6px 4px",borderRight:"1px solid var(--border)",width:52,flexShrink:0,
+        background:isToday?"#f0fdf4":isWeekend?"#fafaf9":"var(--surface2)"}}>
+        <div style={{fontSize:"var(--fs-xs)",fontWeight:600,color:isToday?"var(--accent)":"var(--text3)",letterSpacing:".04em"}}>{dow}</div>
+        {isToday
+          ? <div style={{width:26,height:26,background:"var(--accent)",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:"var(--fs-sm)",fontWeight:700}}>{dayNum}</div>
+          : <div style={{fontSize:"var(--fs-lg)",fontWeight:isWeekend?400:500,color:isWeekend?"var(--text3)":"var(--text)",lineHeight:1.2}}>{dayNum}</div>
+        }
+      </div>
+    );
+
+    if (dayPosts.length===0 && slots.length===0) {
+      return (
+        <div data-today={isToday||undefined} style={{display:"flex",borderBottom:"1px solid var(--border)",minHeight:36,background:bgRow,cursor:"pointer"}}
+          onClick={()=>setNewPostDate(dateStr)}>
+          {dayCell}
+          <div style={{flex:1,display:"flex",alignItems:"center",padding:"0 12px",opacity:.4,fontSize:"var(--fs-xs)",color:"var(--text3)"}}>—</div>
+        </div>
+      );
+    }
+
+    return (
+      <>
+        {dayPosts.map((p,i) => {
+          const sc=STATUS_COLORS[p.status]||STATUS_COLORS["Da Editare"];
+          const cl=clients.find(c=>c.id===p.clientId);
+          return (
+            <div key={p.id} data-today={isToday&&i===0||undefined}
+              style={{display:"flex",borderBottom:i===dayPosts.length-1&&slots.length===0?"1px solid var(--border)":"0.5px solid var(--border)",
+                minHeight:40,background:bgRow,alignItems:"center"}}>
+              {i===0 ? dayCell : <div style={{width:52,flexShrink:0,borderRight:"1px solid var(--border)",background:isToday?"#f0fdf4":isWeekend?"#fafaf9":"var(--surface2)"}}/>}
+
+              {/* Client */}
+              <div style={{width:90,flexShrink:0,padding:"0 8px",borderRight:"1px solid var(--border)",display:"flex",alignItems:"center",gap:5,overflow:"hidden"}}>
+                {cl&&<div style={{width:7,height:7,borderRadius:"50%",background:cl.color,flexShrink:0}}/>}
+                <span style={{fontSize:"var(--fs-xs)",fontWeight:500,color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.clientName||"—"}</span>
+              </div>
+
+              {/* Title — inline editable */}
+              <div style={{flex:1,padding:"0 10px",borderRight:"1px solid var(--border)",display:"flex",alignItems:"center",gap:6,minWidth:0,cursor:"pointer"}}
+                onClick={e=>{e.stopPropagation();setEditPost(p);}}>
+                {editingTitle===p.id ? (
+                  <input autoFocus defaultValue={p.title}
+                    style={{flex:1,border:"none",outline:"none",background:"transparent",fontSize:"var(--fs-sm)",color:"var(--text)",fontFamily:"var(--font)"}}
+                    onBlur={e=>saveTitle(p,e.target.value)}
+                    onKeyDown={e=>{if(e.key==="Enter")saveTitle(p,e.target.value);if(e.key==="Escape")setEditingTitle(null);}}
+                    onClick={e=>e.stopPropagation()}/>
+                ) : (
+                  <>
+                    <span style={{fontSize:"var(--fs-sm)",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:1}}>{p.title||"Post senza titolo"}</span>
+                    <div onClick={e=>{e.stopPropagation();setEditingTitle(p.id);}}
+                      style={{flexShrink:0,opacity:.35,cursor:"pointer",display:"flex",transition:"opacity .15s"}}
+                      onMouseEnter={e=>e.currentTarget.style.opacity=1}
+                      onMouseLeave={e=>e.currentTarget.style.opacity=.35}>
+                      <Icon name="edit" size={12}/>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Status dropdown */}
+              <div style={{width:122,flexShrink:0,padding:"0 8px",borderRight:"1px solid var(--border)",display:"flex",alignItems:"center"}}>
+                <select value={p.status}
+                  onChange={e=>{e.stopPropagation();changeStatus(p,e.target.value);}}
+                  onClick={e=>e.stopPropagation()}
+                  style={{width:"100%",border:"none",outline:"none",fontFamily:"var(--font)",
+                    fontSize:"var(--fs-xs)",fontWeight:600,borderRadius:99,padding:"3px 8px",cursor:"pointer",
+                    background:sc.light,color:sc.text,appearance:"none",WebkitAppearance:"none",textAlign:"center"}}>
+                  {POST_STATUSES.map(s=><option key={s}>{s}</option>)}
+                </select>
+              </div>
+
+              {/* Platform */}
+              <div style={{width:96,flexShrink:0,padding:"0 10px",display:"flex",alignItems:"center"}}>
+                <PlatIcons platform={p.platform}/>
+              </div>
+            </div>
+          );
+        })}
+        {slots.map((c,i)=>(
+          <div key={c.id} style={{display:"flex",borderBottom:"1px solid var(--border)",minHeight:36,background:bgRow,alignItems:"center",cursor:"pointer"}}
+            onClick={()=>setNewPostDate(dateStr)}>
+            {dayPosts.length===0&&i===0 ? dayCell : <div style={{width:52,flexShrink:0,borderRight:"1px solid var(--border)",background:isToday?"#f0fdf4":isWeekend?"#fafaf9":"var(--surface2)"}}/>}
+            <div style={{flex:1,padding:"0 10px",display:"flex",alignItems:"center",gap:6}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:c.color,flexShrink:0}}/>
+              <span style={{fontSize:"var(--fs-xs)",color:c.color,fontWeight:500}}>{c.name}</span>
+              <span style={{fontSize:"var(--fs-xs)",color:"var(--text3)",border:`1px dashed ${c.color}66`,borderRadius:4,padding:"1px 6px"}}>slot</span>
+            </div>
+          </div>
+        ))}
+      </>
+    );
+  }
+
+  const verticalDays = buildVerticalDays();
 
   return (
-    <div style={{ padding:"28px 32px" }}>
+    <div style={{padding:"28px 32px"}}>
       <div className="section-header">
         <h1 className="page-title">{lbl("cal_title","Calendario Editoriale")}</h1>
-        <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+        <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
           <div className="pill-tabs">
             <button className={"pill-tab"+(view==="month"?" active":"")} onClick={()=>setView("month")}>Mese</button>
             <button className={"pill-tab"+(view==="week"?" active":"")} onClick={()=>setView("week")}>Settimana</button>
+            <button className={"pill-tab"+(view==="vertical"?" active":"")} onClick={()=>setView("vertical")}>Verticale</button>
           </div>
-          <button className="btn btn-ghost btn-sm" onClick={prev}><Icon name="chevronL" size={14}/></button>
-          <span style={{ fontSize:"var(--fs-sm)", fontWeight:600, minWidth:200, textAlign:"center" }}>{periodLabel}</span>
-          <button className="btn btn-ghost btn-sm" onClick={next}><Icon name="chevronR" size={14}/></button>
+          {view!=="vertical" && <>
+            <button className="btn btn-ghost btn-sm" onClick={prev}><Icon name="chevronL" size={14}/></button>
+            <span style={{fontSize:"var(--fs-sm)",fontWeight:600,minWidth:200,textAlign:"center"}}>{periodLabel}</span>
+            <button className="btn btn-ghost btn-sm" onClick={next}><Icon name="chevronR" size={14}/></button>
+          </>}
+          <button className="btn btn-ghost btn-sm" onClick={goToday} style={{display:"flex",alignItems:"center",gap:5}}>
+            <Icon name="calendar" size={13}/> Oggi
+          </button>
         </div>
       </div>
 
       {/* Legend */}
-      <div style={{ display:"flex", flexWrap:"wrap", gap:10, marginBottom:14, alignItems:"center" }}>
-        <span style={{ fontSize:"var(--fs-xs)", color:"var(--text3)", fontWeight:600, marginRight:2 }}>STATI:</span>
-        {Object.entries(STATUS_COLORS).map(([s,sc]) => (
-          <div key={s} style={{ display:"flex", alignItems:"center", gap:5 }}>
-            <div style={{ width:8, height:8, borderRadius:"50%", background:sc.bg }}/>
-            <span style={{ fontSize:"var(--fs-xs)", color:"var(--text2)", fontWeight:500 }}>{s}</span>
+      <div style={{display:"flex",flexWrap:"wrap",gap:10,marginBottom:14,alignItems:"center"}}>
+        <span style={{fontSize:"var(--fs-xs)",color:"var(--text3)",fontWeight:600,marginRight:2}}>STATI:</span>
+        {Object.entries(STATUS_COLORS).map(([s,sc])=>(
+          <div key={s} style={{display:"flex",alignItems:"center",gap:5}}>
+            <div style={{width:8,height:8,borderRadius:"50%",background:sc.bg}}/>
+            <span style={{fontSize:"var(--fs-xs)",color:"var(--text2)",fontWeight:500}}>{s}</span>
           </div>
         ))}
-        <div style={{ display:"flex", alignItems:"center", gap:5 }}>
-          <div style={{ width:8, height:8, borderRadius:2, border:"1.5px dashed var(--text3)" }}/>
-          <span style={{ fontSize:"var(--fs-xs)", color:"var(--text2)", fontWeight:500 }}>Slot cliente</span>
-        </div>
       </div>
 
-      <div className="card" style={{ overflow:"hidden", padding:0 }}>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", background:"var(--surface2)", borderBottom:"1.5px solid var(--border)" }}>
-          {DAYS_IT.map(d => <div key={d} style={{ padding:"9px 0", textAlign:"center", fontSize:"var(--fs-xs)", fontWeight:600, color:"var(--text3)", letterSpacing:".04em" }}>{d}</div>)}
-        </div>
-
-        {view==="month" && (
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)" }}>
-            {cells.map((cell,i) => {
-              const { day, dateStr, otherMonth } = cell;
-              const dayPosts = postsFor(dateStr);
-              const slots    = slotsFor(dateStr);
-              const isToday  = dateStr===today();
+      {/* VERTICAL VIEW */}
+      {view==="vertical" && (
+        <div className="card" style={{overflow:"hidden",padding:0}}>
+          {/* Column headers */}
+          <div style={{display:"grid",gridTemplateColumns:"52px 90px 1fr 122px 96px",background:"var(--surface2)",borderBottom:"1.5px solid var(--border)"}}>
+            {["Giorno","Cliente","Titolo post","Stato","Piattaforma"].map((h,i)=>(
+              <div key={i} style={{padding:"8px 10px",fontSize:"var(--fs-xs)",fontWeight:600,color:"var(--text3)",letterSpacing:".04em",textTransform:"uppercase",borderRight:i<4?"1px solid var(--border)":"none",textAlign:i===0?"center":"left"}}>{h}</div>
+            ))}
+          </div>
+          {/* Scrollable days */}
+          <div ref={scrollRef} style={{maxHeight:"calc(100vh - 260px)",overflowY:"auto"}}>
+            {verticalDays.map((ds,i)=>{
+              const d=new Date(ds+"T00:00:00");
+              const showMonthSep = d.getDate()===1 || i===0;
               return (
-                <div key={i} className={"cal-cell"+(isToday?" today":"")+(otherMonth?" other-month":"")} onClick={()=>setNewPostDate(dateStr)}>
-                  <div className="cal-day-num" style={{ fontSize:"var(--fs-xs)", fontWeight:isToday?700:400, marginBottom:3 }}>
-                    {isToday
-                      ? <span style={{ background:"var(--accent)", color:"#fff", borderRadius:"50%", width:18, height:18, display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:"var(--fs-xs)" }}>{day}</span>
-                      : <span style={{ color: otherMonth?"var(--border2)":"var(--text3)" }}>{day}</span>}
-                  </div>
-                  {slots.map(c    => <SlotTag key={c.id} c={c} onClick={()=>setNewPostDate(dateStr)}/>)}
-                  {dayPosts.map(p => <CalTag  key={p.id} p={p} onClick={()=>setEditPost(p)}/>)}
+                <div key={ds}>
+                  {showMonthSep && (
+                    <div style={{padding:"6px 12px",fontSize:"var(--fs-xs)",fontWeight:700,color:"var(--text3)",letterSpacing:".06em",textTransform:"uppercase",background:"var(--surface2)",borderBottom:"1px solid var(--border)"}}>
+                      {MONTHS_IT[d.getMonth()]} {d.getFullYear()}
+                    </div>
+                  )}
+                  <VerticalDayRows dateStr={ds}/>
                 </div>
               );
             })}
           </div>
-        )}
-
-        {view==="week" && (
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)" }}>
-            {weekDays.map((d,i) => {
-              const ds = isoDate(d.getFullYear(), d.getMonth(), d.getDate());
-              const isToday = ds===today();
-              return (
-                <div key={i} className={"cal-cell"+(isToday?" today":"")} style={{ minHeight:200 }} onClick={()=>setNewPostDate(ds)}>
-                  <div style={{ fontSize:"var(--fs-xs)", color:"var(--text3)", fontWeight:600, marginBottom:2 }}>{DAYS_IT[d.getDay()]}</div>
-                  <div style={{ fontSize:"var(--fs-lg)", fontWeight:isToday?700:500, color:isToday?"var(--accent)":"var(--text)", marginBottom:7 }}>{d.getDate()}</div>
-                  {slotsFor(ds).map(c    => <SlotTag key={c.id} c={c} onClick={()=>setNewPostDate(ds)}/>)}
-                  {postsFor(ds).map(p    => <CalTag  key={p.id} p={p} onClick={()=>setEditPost(p)}/>)}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {tooltip && (
-        <div className="tooltip" style={{ left:tooltip.x+14, top:tooltip.y+14 }}>
-          <div style={{ fontWeight:600, marginBottom:3 }}>{tooltip.post.title||"Post senza titolo"}</div>
-          <div style={{ opacity:.75, fontSize:"var(--fs-xs)" }}>{tooltip.post.clientName} · {tooltip.post.platform}</div>
-          <div style={{ opacity:.75, fontSize:"var(--fs-xs)" }}>{fmtDate(tooltip.post.date)}</div>
-          <div style={{ marginTop:6 }}>
-            <span style={{ background:STATUS_COLORS[tooltip.post.status]?.bg, color:"#fff", padding:"2px 8px", borderRadius:99, fontSize:"var(--fs-xs)", fontWeight:600 }}>{tooltip.post.status}</span>
-          </div>
-          {tooltip.post.caption && <div style={{ marginTop:6, opacity:.6, fontSize:"var(--fs-xs)", borderTop:"1px solid rgba(255,255,255,.15)", paddingTop:6 }}>{tooltip.post.caption.slice(0,70)}{tooltip.post.caption.length>70?"…":""}</div>}
         </div>
       )}
 
-      {(editPost||newPostDate) && (
+      {/* MONTH VIEW */}
+      {view==="month" && (
+        <div className="card" style={{overflow:"hidden",padding:0}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",background:"var(--surface2)",borderBottom:"1.5px solid var(--border)"}}>
+            {DAYS_IT.map(d=><div key={d} style={{padding:"9px 0",textAlign:"center",fontSize:"var(--fs-xs)",fontWeight:600,color:"var(--text3)",letterSpacing:".04em"}}>{d}</div>)}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
+            {cells.map((cell,i)=>{
+              const {day,dateStr,otherMonth}=cell;
+              const isToday=dateStr===today();
+              return (
+                <div key={i} className={"cal-cell"+(isToday?" today":"")+(otherMonth?" other-month":"")} onClick={()=>setNewPostDate(dateStr)}>
+                  <div className="cal-day-num" style={{fontSize:"var(--fs-xs)",fontWeight:isToday?700:400,marginBottom:3}}>
+                    {isToday?<span style={{background:"var(--accent)",color:"#fff",borderRadius:"50%",width:18,height:18,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:"var(--fs-xs)"}}>{day}</span>:<span style={{color:otherMonth?"var(--border2)":"var(--text3)"}}>{day}</span>}
+                  </div>
+                  {slotsFor(dateStr).map(c=>(
+                    <div key={c.id} className="cal-tag" style={{background:c.color+"15",border:`1px dashed ${c.color}66`,color:c.color}} onClick={e=>{e.stopPropagation();setNewPostDate(dateStr);}}>
+                      <div style={{width:5,height:5,borderRadius:"50%",background:c.color,flexShrink:0}}/><span style={{overflow:"hidden",textOverflow:"ellipsis",flex:1,fontWeight:500}}>{c.name}</span>
+                    </div>
+                  ))}
+                  {postsFor(dateStr).map(p=>{
+                    const sc=STATUS_COLORS[p.status]||STATUS_COLORS["Da Editare"];
+                    const cl=clients.find(c=>c.id===p.clientId);
+                    const clientColor=cl?.color||"#94a3b8";
+                    return (
+                      <div key={p.id} className="cal-tag"
+                        style={{background:clientColor+"22",borderLeft:`3px solid ${clientColor}`,color:"var(--text)",boxShadow:`0 3px 0 0 ${sc.bg}, 0 4px 6px ${sc.bg}33`}}
+                        onClick={e=>{e.stopPropagation();setEditPost(p);}}
+                        onMouseEnter={e=>setTooltip({post:p,x:e.clientX,y:e.clientY})}
+                        onMouseLeave={()=>setTooltip(null)}>
+                        <span style={{overflow:"hidden",textOverflow:"ellipsis",flex:1,fontWeight:500}}>{p.title||"Post"}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* WEEK VIEW */}
+      {view==="week" && (
+        <div className="card" style={{overflow:"hidden",padding:0}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",background:"var(--surface2)",borderBottom:"1.5px solid var(--border)"}}>
+            {weekDays.map((d,i)=>{
+              const ds=isoDate(d.getFullYear(),d.getMonth(),d.getDate());
+              const isToday=ds===today();
+              return (
+                <div key={i} style={{padding:"10px 8px",textAlign:"center",background:isToday?"#f0fdf422":"transparent"}}>
+                  <div style={{fontSize:11,color:"var(--text3)",fontWeight:600}}>{DAYS_IT[d.getDay()]}</div>
+                  <div style={{fontSize:16,fontWeight:isToday?700:500,color:isToday?"var(--accent)":"var(--text)"}}>{d.getDate()}</div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
+            {weekDays.map((d,i)=>{
+              const ds=isoDate(d.getFullYear(),d.getMonth(),d.getDate());
+              const isToday=ds===today();
+              return (
+                <div key={i} className={"cal-cell"+(isToday?" today":"")} style={{minHeight:200}} onClick={()=>setNewPostDate(ds)}>
+                  {slotsFor(ds).map(c=>(
+                    <div key={c.id} className="cal-tag" style={{background:c.color+"15",border:`1px dashed ${c.color}66`,color:c.color}} onClick={e=>{e.stopPropagation();setNewPostDate(ds);}}>
+                      <div style={{width:5,height:5,borderRadius:"50%",background:c.color,flexShrink:0}}/><span style={{overflow:"hidden",textOverflow:"ellipsis",flex:1,fontWeight:500}}>{c.name}</span>
+                    </div>
+                  ))}
+                  {postsFor(ds).map(p=>{
+                    const sc=STATUS_COLORS[p.status]||STATUS_COLORS["Da Editare"];
+                    const cl=clients.find(c=>c.id===p.clientId);
+                    const clientColor=cl?.color||"#94a3b8";
+                    return (
+                      <div key={p.id} className="cal-tag"
+                        style={{background:clientColor+"22",borderLeft:`3px solid ${clientColor}`,color:"var(--text)",boxShadow:`0 3px 0 0 ${sc.bg}, 0 4px 6px ${sc.bg}33`}}
+                        onClick={e=>{e.stopPropagation();setEditPost(p);}}
+                        onMouseEnter={e=>setTooltip({post:p,x:e.clientX,y:e.clientY})}
+                        onMouseLeave={()=>setTooltip(null)}>
+                        <span style={{overflow:"hidden",textOverflow:"ellipsis",flex:1,fontWeight:500}}>{p.title||"Post"}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Tooltip */}
+      {tooltip && (
+        <div className="tooltip" style={{left:tooltip.x+14,top:tooltip.y+14}}>
+          <div style={{fontWeight:600,marginBottom:3}}>{tooltip.post.title||"Post senza titolo"}</div>
+          <div style={{opacity:.75,fontSize:"var(--fs-xs)"}}>{tooltip.post.clientName} · {tooltip.post.platform}</div>
+          <div style={{opacity:.75,fontSize:"var(--fs-xs)"}}>{fmtDate(tooltip.post.date)}</div>
+          <div style={{marginTop:6}}><span style={{background:STATUS_COLORS[tooltip.post.status]?.bg,color:"#fff",padding:"2px 8px",borderRadius:99,fontSize:"var(--fs-xs)",fontWeight:600}}>{tooltip.post.status}</span></div>
+          {tooltip.post.caption&&<div style={{marginTop:6,opacity:.6,fontSize:"var(--fs-xs)",borderTop:"1px solid rgba(255,255,255,.15)",paddingTop:6}}>{tooltip.post.caption.slice(0,70)}{tooltip.post.caption.length>70?"…":""}</div>}
+        </div>
+      )}
+
+      {(editPost||newPostDate)&&(
         <PostModal post={editPost} defaultDate={newPostDate} clients={clients} memory={memory} addMemory={addMemory}
-          onSave={async p => { if(!p.id)p={...p,id:genId()}; await onSavePost(p); setEditPost(null); setNewPostDate(null); }}
-          onDelete={async id => { await onDeletePost(id); setEditPost(null); }}
-          onClose={() => { setEditPost(null); setNewPostDate(null); }}/>
+          onSave={async p=>{if(!p.id)p={...p,id:genId()};await onSavePost(p);setEditPost(null);setNewPostDate(null);}}
+          onDelete={async id=>{await onDeletePost(id);setEditPost(null);}}
+          onClose={()=>{setEditPost(null);setNewPostDate(null);}}/>
       )}
     </div>
   );
 }
 
-/* ─── POST MODAL ─────────────────────────────────────────────────────────── */
+
 function PostModal({ post, defaultDate, clients, memory, addMemory, onSave, onDelete, onClose }) {
   const [form, setForm] = useState(post || { title:"", clientId:"", clientName:"", platform:"Instagram", date:defaultDate||today(), status:"Da Editare", caption:"", hashtags:"", firstComment:"", notes:"" });
   function upd(k,v) { setForm(f=>({...f,[k]:v})); }
-  function save() {
+  async function save() {
     const cl = clients.find(c=>c.id===form.clientId);
     if (form.caption)      addMemory("captions",      form.caption);
     if (form.hashtags)     addMemory("hashtags",      form.hashtags);
     if (form.firstComment) addMemory("firstComments", form.firstComment);
-    onSave({...form, clientName:cl?.name||form.clientName});
+    await onSave({...form, clientName:cl?.name||form.clientName});
   }
   const sc = STATUS_COLORS[form.status] || STATUS_COLORS["Da Editare"];
   return (
@@ -901,7 +1128,7 @@ function Settings({ users, onSaveUser, onDeleteUser, lbl, setLbl, currentUser, f
     ["posts_title","Titolo Post","Post"],["clients_title","Titolo Clienti","Clienti"],
   ];
 
-  function invite() {
+  async function invite() {
     if (!form.name||!form.email||!form.pw) return setMsg("⚠️ Compila tutti i campi");
     if (users.find(u=>u.email===form.email)) return setMsg("⚠️ Email già registrata");
     await onSaveUser({id:genId(),...form,password:form.pw,avatar:form.name[0].toUpperCase()});
