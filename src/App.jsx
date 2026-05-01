@@ -192,7 +192,7 @@ function buildCSS(fontFamily, fontSize) {
       .mob-nav-bar { display: none !important; }
       .sidebar { display: flex !important; }
     }
-  \`;
+  `;
 }
 
 /* ─── APP ────────────────────────────────────────────────────────────────── */
