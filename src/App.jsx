@@ -194,31 +194,7 @@ function buildCSS(fontFamily, fontSize) {
       .cal-desktop  { display: block !important; }
       .cal-mobile   { display: none !important; }
     }
-    /* Intermediate: hide social columns below 1100px */
-    @media (max-width: 1100px) and (min-width: 769px) {
-      .vert-col-ig  { display: none !important; }
-      .vert-col-fb  { display: none !important; }
-      .vert-col-tt  { display: none !important; }
-      .vert-col-h-ig { display: none !important; }
-      .vert-col-h-fb { display: none !important; }
-      .vert-col-h-tt { display: none !important; }
-    }
-    /* Narrow: also hide title column below 900px, keep tooltip */
-    @media (max-width: 900px) and (min-width: 769px) {
-      .vert-col-title  { display: none !important; }
-      .vert-col-h-title { display: none !important; }
-    }
-    /* Responsive vertical grid at intermediate sizes */
-    @media (max-width: 1100px) and (min-width: 901px) {
-      #cal-vert-grid, #cal-vert-header {
-        grid-template-columns: 50px 110px 1fr 108px !important;
-      }
-    }
-    @media (max-width: 900px) and (min-width: 769px) {
-      #cal-vert-grid, #cal-vert-header {
-        grid-template-columns: 50px 110px 1fr 108px !important;
-      }
-    }
+    /* Column visibility handled dynamically in JS via useWindowWidth */
   `;
 }
 
@@ -557,7 +533,18 @@ function PostRowComp({ post, clients, onDeletePost, compact }) {
 }
 
 /* ─── CALENDAR ───────────────────────────────────────────────────────────── */
+function useWindowWidth() {
+  const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 1200);
+  useEffect(() => {
+    const fn = () => setW(window.innerWidth);
+    window.addEventListener("resize", fn);
+    return () => window.removeEventListener("resize", fn);
+  }, []);
+  return w;
+}
+
 function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, addMemory }) {
+  const winW = useWindowWidth();
   const [view,        setView]        = useState("vertical");
   const [year,        setYear]        = useState(new Date().getFullYear());
   const [month,       setMonth]       = useState(new Date().getMonth());
@@ -685,10 +672,17 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
 
   const STATO_COLORS = { "Da Editare":STATUS_COLORS["Da Editare"], "Pronto":STATUS_COLORS["Pronto"] };
   const SOCIAL_COLORS = { "—":null, "Programmato":STATUS_COLORS["Programmato"], "Pubblicato":STATUS_COLORS["Pubblicato"] };
-  const COLS = "50px 110px 1fr 108px 118px 118px 118px";
+  // Dynamic grid columns based on window width
+  const showSocial = winW >= 1100;
+  const showTitle  = winW >= 900;
+  const COLS = showSocial
+    ? "50px 110px 1fr 108px 118px 118px 118px"
+    : showTitle
+      ? "50px 110px 1fr 108px"
+      : "50px 110px 108px";
 
   // ── vertical row ─────────────────────────────────────────────────────────
-  function VertRow({ dateStr }) {
+  function VertRow({ dateStr, showTitle=true, showSocial=true }) {
     const dayPosts=postsFor(dateStr), slots=slotsFor(dateStr);
     const isToday=dateStr===today();
     const d=new Date(dateStr+"T00:00:00"), dow=DAYS_IT[d.getDay()], dayNum=d.getDate();
@@ -761,8 +755,9 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
                 </div>
               </div>
 
-              {/* Titolo */}
-              <div className="vert-col-title" style={{borderRight:"1px solid var(--border)",padding:"0 10px",display:"flex",alignItems:"center",cursor:"pointer",position:"relative",overflow:"visible"}}
+              {/* Titolo — visible only when showTitle */}
+              {showTitle && (
+              <div style={{borderRight:"1px solid var(--border)",padding:"0 10px",display:"flex",alignItems:"center",cursor:"pointer",position:"relative",overflow:"visible"}}
                 onClick={e=>{e.stopPropagation();setEditPost(p);}}>
                 {editingTitle===p.id
                   ? <input autoFocus defaultValue={p.title}
@@ -779,6 +774,7 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
                     </div>
                 }
               </div>
+              )}
 
               {/* Stato principale */}
               <div style={{borderRight:"1px solid var(--border)",padding:"0 7px",display:"flex",alignItems:"center",justifyContent:"center",overflow:"visible"}}>
@@ -787,22 +783,22 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
               </div>
 
               {/* Instagram */}
-              <div className="vert-col-ig" style={{borderRight:"1px solid var(--border)",padding:"0 7px",display:"flex",alignItems:"center",justifyContent:"center",overflow:"visible"}}>
+              {showSocial && <div style={{borderRight:"1px solid var(--border)",padding:"0 7px",display:"flex",alignItems:"center",justifyContent:"center",overflow:"visible"}}>
                 <PillDropdown postId={p.id} field="igStatus" value={p.igStatus||"—"}
                   options={["—","Programmato","Pubblicato"]} colorMap={SOCIAL_COLORS} small/>
-              </div>
+              </div>}
 
               {/* Facebook */}
-              <div className="vert-col-fb" style={{borderRight:"1px solid var(--border)",padding:"0 7px",display:"flex",alignItems:"center",justifyContent:"center",overflow:"visible"}}>
+              {showSocial && <div style={{borderRight:"1px solid var(--border)",padding:"0 7px",display:"flex",alignItems:"center",justifyContent:"center",overflow:"visible"}}>
                 <PillDropdown postId={p.id} field="fbStatus" value={p.fbStatus||"—"}
                   options={["—","Programmato","Pubblicato"]} colorMap={SOCIAL_COLORS} small/>
-              </div>
+              </div>}
 
               {/* TikTok */}
-              <div className="vert-col-tt" style={{padding:"0 7px",display:"flex",alignItems:"center",justifyContent:"center",overflow:"visible"}}>
+              {showSocial && <div style={{padding:"0 7px",display:"flex",alignItems:"center",justifyContent:"center",overflow:"visible"}}>
                 <PillDropdown postId={p.id} field="ttStatus" value={p.ttStatus||"—"}
                   options={["—","Programmato","Pubblicato"]} colorMap={SOCIAL_COLORS} small/>
-              </div>
+              </div>}
             </div>
           );
         })}
@@ -871,17 +867,17 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
         <div className="card" style={{overflow:"visible",padding:0}}>
           <div id="cal-vert-header" style={{display:"grid",gridTemplateColumns:COLS,background:"var(--surface2)",borderBottom:"1.5px solid var(--border)",borderRadius:"var(--radius) var(--radius) 0 0",overflow:"hidden"}}>
             {[
-              {label:"Giorno",center:true,color:null,icon:null,cls:""},
-              {label:"Cliente",center:false,color:null,icon:null,cls:""},
-              {label:"Titolo post",center:false,color:null,icon:null,cls:"vert-col-h-title"},
-              {label:"Stato",center:true,color:null,icon:null,cls:""},
-              {label:"Instagram",center:true,color:"#9c27b0",icon:"instagram",cls:"vert-col-h-ig"},
-              {label:"Facebook",center:true,color:"#1976d2",icon:"facebook",cls:"vert-col-h-fb"},
-              {label:"TikTok",center:true,color:"#e91e63",icon:"tiktok",cls:"vert-col-h-tt"},
-            ].map((h,i)=>(
-              <div key={i} className={h.cls} style={{padding:"8px 8px",fontSize:"var(--fs-xs)",fontWeight:600,
+              {label:"Giorno",  center:true,  color:null,      icon:null,          show:true},
+              {label:"Cliente", center:false, color:null,      icon:null,          show:true},
+              {label:"Titolo",  center:false, color:null,      icon:null,          show:showTitle},
+              {label:"Stato",   center:true,  color:null,      icon:null,          show:true},
+              {label:"Instagram",center:true, color:"#9c27b0", icon:"instagram",   show:showSocial},
+              {label:"Facebook", center:true, color:"#1976d2", icon:"facebook",    show:showSocial},
+              {label:"TikTok",   center:true, color:"#e91e63", icon:"tiktok",      show:showSocial},
+            ].filter(h=>h.show).map((h,i,arr)=>(
+              <div key={i} style={{padding:"8px 8px",fontSize:"var(--fs-xs)",fontWeight:600,
                 color:h.color||"var(--text3)",letterSpacing:".04em",textTransform:"uppercase",
-                borderRight:i<6?"1px solid var(--border)":"none",
+                borderRight:i<arr.length-1?"1px solid var(--border)":"none",
                 display:"flex",alignItems:"center",
                 justifyContent:h.center?"center":"flex-start",paddingLeft:h.center?8:10,
                 gap:4,whiteSpace:"nowrap"}}>
@@ -902,7 +898,7 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
                       {MONTHS_IT[d.getMonth()]} {d.getFullYear()}
                     </div>
                   )}
-                  <VertRow dateStr={ds}/>
+                  <VertRow dateStr={ds} showTitle={showTitle} showSocial={showSocial}/>
                 </div>
               );
             })}
