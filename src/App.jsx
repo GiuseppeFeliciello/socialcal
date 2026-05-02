@@ -183,14 +183,16 @@ function buildCSS(fontFamily, fontSize) {
       .clients-grid { grid-template-columns: 1fr !important; }
       .modal { max-width: 100% !important; margin: 0 !important; border-radius: 16px 16px 0 0 !important; max-height: 92vh !important; }
       .modal-overlay { align-items: flex-end !important; padding: 0 !important; }
-      .vert-cols { grid-template-columns: 40px 90px 1fr 90px !important; }
-      .vert-social-cols { display: none !important; }
-      .vert-header-social { display: none !important; }
       .post-row { flex-wrap: wrap; }
+      .cal-desktop { display: none !important; }
+      .cal-mobile  { display: block !important; }
+      .cal-page    { padding: 12px 0 !important; }
     }
     @media (min-width: 769px) {
-      .mob-nav-bar { display: none !important; }
-      .sidebar { display: flex !important; }
+      .mob-nav-bar  { display: none !important; }
+      .sidebar      { display: flex !important; }
+      .cal-desktop  { display: block !important; }
+      .cal-mobile   { display: none !important; }
     }
   `;
 }
@@ -447,7 +449,7 @@ function Dashboard({ posts, clients, onDeletePost, lbl }) {
   ];
 
   return (
-    <div style={{ padding:"28px 32px", maxWidth:1100 }}>
+    <div style={{ padding:"clamp(14px,4vw,32px)" }}>
       <div className="section-header">
         <h1 className="page-title">{lbl("dash_title","Dashboard")}</h1>
         <div style={{ fontSize:"var(--fs-xs)", color:"var(--text3)" }}>{DAYS_IT[now.getDay()]}, {fmtDate(today())}</div>
@@ -810,7 +812,7 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
   const periodLabel=view==="week"?`${fmtDate(weekDays[0])} – ${fmtDate(weekDays[6])}`:`${MONTHS_IT[month]} ${year}`;
 
   return (
-    <div style={{padding:"28px 32px"}}>
+    <div className="cal-page" style={{padding:"28px 32px"}}>
       <div className="section-header">
         <h1 className="page-title">{lbl("cal_title","Calendario Editoriale")}</h1>
         <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
@@ -832,6 +834,8 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
         </div>
       </div>
 
+      {/* DESKTOP VIEWS */}
+      <div className="cal-desktop">
       {/* VERTICAL */}
       {view==="vertical" && (
         <div className="card" style={{overflow:"visible",padding:0}}>
@@ -907,6 +911,8 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
         </div>
       )}
 
+      </div>{/* end cal-desktop */}
+
       {/* Tooltip */}
       {tooltip&&(
         <div className="tooltip" style={{left:tooltip.x+14,top:tooltip.y+14}}>
@@ -923,6 +929,195 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
           onDelete={async id=>{await onDeletePost(id);setEditPost(null);}}
           onClose={()=>{setEditPost(null);setNewPostData(null);}}/>
       )}
+
+      {/* ── MOBILE CALENDAR ── */}
+      <div className="cal-mobile" style={{display:"none"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px 8px",borderBottom:"1.5px solid var(--border)",background:"var(--surface)"}}>
+          <span style={{fontSize:"var(--fs)",fontWeight:700,color:"var(--text)"}}>Calendario</span>
+          <div style={{display:"flex",gap:7}}>
+            <button className="btn btn-ghost btn-sm" onClick={goToday} style={{display:"flex",alignItems:"center",gap:4}}><Icon name="calendar" size={12}/> Oggi</button>
+            <button className="btn btn-primary btn-sm" onClick={()=>setNewPostData({date:today()})} style={{display:"flex",alignItems:"center",gap:4}}><Icon name="plus" size={12}/></button>
+          </div>
+        </div>
+        <MobileCalendar posts={posts} clients={clients} vertDays={vertDays}
+          postsFor={postsFor} slotsFor={slotsFor} clientBorderColor={clientBorderColor}
+          onSlotClick={ds=>setNewPostData({date:ds})}
+          onClientSlotClick={(ds,c)=>setNewPostData({date:ds,clientId:c.id,clientName:c.name})}
+          onPostClick={p=>setEditPost(p)}
+          scrollRef={scrollRef}/>
+      </div>
+    </div>
+  );
+}
+
+/* ─── MOBILE CALENDAR ────────────────────────────────────────────────────── */
+function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBorderColor, onSlotClick, onClientSlotClick, onPostClick, scrollRef }) {
+  const [expanded, setExpanded] = useState({});
+
+  const PMAP = {
+    "Instagram": {bg:"#f3e5ff", stroke:"#9c27b0"},
+    "Facebook":  {bg:"#e3f2fd", stroke:"#1976d2"},
+    "TikTok":    {bg:"#fce4ec", stroke:"#e91e63"},
+  };
+
+  function PlatIcon({name}) {
+    const p = PMAP[name]; if(!p) return null;
+    const paths = {
+      "Instagram": <><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/></>,
+      "Facebook":  <><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></>,
+      "TikTok":    <><path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"/></>,
+    };
+    return (
+      <div style={{width:14,height:14,borderRadius:3,background:p.bg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={p.stroke} strokeWidth="2.5">{paths[name]}</svg>
+      </div>
+    );
+  }
+
+  function PostCard({p, isToday}) {
+    const sc = STATUS_COLORS[p.status] || STATUS_COLORS["Da Editare"];
+    const cl = clients.find(c=>c.id===p.clientId);
+    const bColor = clientBorderColor(p);
+    const plats = p.platform==="Tutte"?["Instagram","Facebook","TikTok"]:p.platform?[p.platform]:[];
+    const socialState = [
+      {key:"igStatus",plat:"Instagram"},
+      {key:"fbStatus",plat:"Facebook"},
+      {key:"ttStatus",plat:"TikTok"},
+    ].filter(x=>p[x.key]&&p[x.key]!=="—");
+    const activeSocial = socialState[0];
+
+    return (
+      <div onClick={()=>onPostClick(p)}
+        style={{padding:"6px 8px",display:"flex",flexDirection:"column",gap:3,cursor:"pointer",
+          borderBottom:"0.5px solid var(--border)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:5}}>
+          <div style={{width:3,height:28,borderRadius:2,background:bColor,flexShrink:0}}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:4}}>
+              <span style={{fontSize:"var(--fs-xs)",fontWeight:700,color:cl?.color||"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                {p.clientName||"—"}
+              </span>
+              {isToday&&<span style={{fontSize:8,fontWeight:700,color:"var(--accent)",background:"var(--accentbg)",padding:"1px 4px",borderRadius:99,flexShrink:0}}>OGGI</span>}
+            </div>
+            <div style={{fontSize:"var(--fs-sm)",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+              {p.title||"Post senza titolo"}
+            </div>
+          </div>
+          <span style={{fontSize:9,fontWeight:600,background:sc.light,color:sc.text,padding:"2px 6px",borderRadius:99,flexShrink:0,border:`1px solid ${sc.bg}44`}}>
+            {p.status}
+          </span>
+        </div>
+        {(plats.length>0||activeSocial)&&(
+          <div style={{display:"flex",alignItems:"center",gap:4,paddingLeft:8}}>
+            <div style={{display:"flex",gap:3}}>
+              {plats.map(pl=><PlatIcon key={pl} name={pl}/>)}
+            </div>
+            {activeSocial&&(
+              <span style={{fontSize:9,color:STATUS_COLORS[activeSocial?p[activeSocial.key]:"—"]?.bg||"var(--text3)",fontWeight:600}}>
+                {p[activeSocial.key]}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div ref={scrollRef} style={{overflowY:"auto",maxHeight:"calc(100vh - 120px)"}}>
+      {vertDays.map((ds,i)=>{
+        const d=new Date(ds+"T00:00:00");
+        const isToday=ds===today();
+        const dayPosts=postsFor(ds);
+        const slots=slotsFor(ds);
+        const dow=DAYS_IT[d.getDay()];
+        const dayNum=d.getDate();
+        const isWeekend=d.getDay()===0||d.getDay()===6;
+        const showSep=d.getDate()===1||i===0;
+        const isExpanded=expanded[ds];
+        const extraCount=dayPosts.length-1;
+
+        const DayCell=(
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+            gap:1,padding:"4px 2px",borderRight:"1px solid var(--border)",width:44,flexShrink:0,
+            background:isToday?"#edf7f2":isWeekend?"#f5f4f2":"var(--surface2)"}}>
+            <div style={{fontSize:8,fontWeight:600,color:isToday?"var(--accent)":"var(--text3)",letterSpacing:".04em"}}>{dow}</div>
+            {isToday
+              ? <div style={{width:22,height:22,background:"var(--accent)",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:11,fontWeight:700}}>{dayNum}</div>
+              : <div style={{fontSize:13,fontWeight:isWeekend?400:500,color:isWeekend?"var(--text3)":"var(--text)",lineHeight:1.2}}>{dayNum}</div>}
+          </div>
+        );
+
+        return (
+          <div key={ds} data-today={isToday||undefined}>
+            {showSep&&(
+              <div style={{display:"flex",background:"var(--surface2)",borderBottom:"1px solid var(--border)"}}>
+                <div style={{width:44,borderRight:"1px solid var(--border)",flexShrink:0}}/>
+                <div style={{padding:"4px 10px",fontSize:9,fontWeight:700,color:"var(--text3)",letterSpacing:".06em",textTransform:"uppercase"}}>
+                  {MONTHS_IT[d.getMonth()]} {d.getFullYear()}
+                </div>
+              </div>
+            )}
+
+            {/* Empty day */}
+            {dayPosts.length===0&&slots.length===0&&(
+              <div style={{display:"flex",borderBottom:"1px solid var(--border)",minHeight:32,
+                background:isToday?"#f0fdf4":isWeekend?"#fafaf9":"var(--surface)",
+                cursor:"pointer",alignItems:"stretch"}}
+                onClick={()=>onSlotClick(ds)}>
+                {DayCell}
+                <div style={{flex:1,display:"flex",alignItems:"center",padding:"0 10px",opacity:.3,fontSize:"var(--fs-xs)",color:"var(--text3)"}}>—</div>
+              </div>
+            )}
+
+            {/* Slots */}
+            {slots.map((c,si)=>(
+              <div key={c.id} style={{display:"flex",borderBottom:"0.5px solid var(--border)",minHeight:38,
+                background:isToday?"#f0fdf4":isWeekend?"#fafaf9":"var(--surface)",
+                cursor:"pointer",alignItems:"stretch"}}
+                onClick={()=>onClientSlotClick(ds,c)}>
+                {si===0&&dayPosts.length===0?DayCell:<div style={{width:44,flexShrink:0,borderRight:"1px solid var(--border)",background:isToday?"#edf7f2":isWeekend?"#f5f4f2":"var(--surface2)"}}/>}
+                <div style={{flex:1,display:"flex",alignItems:"center",padding:"0 8px"}}>
+                  <div style={{borderLeft:`2px dashed ${c.color}`,background:c.color+"08",flex:1,
+                    display:"flex",alignItems:"center",gap:7,padding:"6px 8px",borderRadius:"0 4px 4px 0"}}>
+                    <span style={{fontSize:10,fontWeight:700,color:c.color}}>{c.name}</span>
+                    <span style={{fontSize:9,color:c.color+"88"}}>+ aggiungi post</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* First post */}
+            {dayPosts.length>0&&(
+              <div style={{display:"flex",borderBottom:dayPosts.length>1&&!isExpanded?"1px solid var(--border)":"none",
+                background:isToday?"#f0fdf4":isWeekend?"#fafaf9":"var(--surface)",alignItems:"stretch"}}>
+                {DayCell}
+                <div style={{flex:1,minWidth:0}}>
+                  <PostCard p={dayPosts[0]} isToday={isToday}/>
+                  {/* "+N more" button */}
+                  {dayPosts.length>1&&!isExpanded&&(
+                    <div onClick={e=>{e.stopPropagation();setExpanded(x=>({...x,[ds]:true}));}}
+                      style={{padding:"4px 8px 5px",display:"flex",alignItems:"center",gap:5,cursor:"pointer",borderBottom:"1px solid var(--border)"}}>
+                      <span style={{fontSize:9,background:"var(--surface2)",color:"var(--text2)",padding:"1px 7px",borderRadius:99,border:"0.5px solid var(--border2)",fontWeight:600}}>
+                        +{extraCount} {extraCount===1?"altro post":"altri post"}
+                      </span>
+                      <span style={{fontSize:9,color:"var(--text3)"}}>— tocca per vedere</span>
+                    </div>
+                  )}
+                  {/* Extra posts when expanded */}
+                  {isExpanded&&dayPosts.slice(1).map(p=><PostCard key={p.id} p={p} isToday={isToday}/>)}
+                  {isExpanded&&(
+                    <div onClick={e=>{e.stopPropagation();setExpanded(x=>({...x,[ds]:false}));}}
+                      style={{padding:"4px 8px 5px",display:"flex",alignItems:"center",cursor:"pointer",borderBottom:"1px solid var(--border)"}}>
+                      <span style={{fontSize:9,color:"var(--text3)"}}>▲ riduci</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1011,7 +1206,7 @@ function PostsSection({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
   ).sort((a,b)=>a.date?.localeCompare(b.date));
 
   return (
-    <div style={{ padding:"28px 32px" }}>
+    <div style={{ padding:"clamp(14px,4vw,32px)" }}>
       <div className="section-header">
         <h1 className="page-title">{lbl("posts_title","Post")}</h1>
         {canEdit && <button className="btn btn-primary" onClick={()=>setNewPost(true)}><Icon name="plus" size={14}/> Nuovo Post</button>}
@@ -1070,7 +1265,7 @@ function ClientsSection({ clients, onSaveClient, onDeleteClient, posts, lbl }) {
   async function del(id) { if(confirm("Eliminare questo cliente?")) await onDeleteClient(id); }
 
   return (
-    <div style={{ padding:"28px 32px" }}>
+    <div style={{ padding:"clamp(14px,4vw,32px)" }}>
       <div className="section-header">
         <h1 className="page-title">{lbl("clients_title","Clienti")}</h1>
         <button className="btn btn-primary" onClick={()=>setNewClient(true)}><Icon name="plus" size={14}/> Nuovo Cliente</button>
@@ -1238,7 +1433,7 @@ function Settings({ users, onSaveUser, onDeleteUser, lbl, setLbl, currentUser, f
   ];
 
   return (
-    <div style={{ padding:"28px 32px", maxWidth:880 }}>
+    <div style={{ padding:"clamp(14px,4vw,32px)", maxWidth:880 }}>
       <h1 className="page-title" style={{ marginBottom:22 }}>Impostazioni</h1>
       <div className="pill-tabs" style={{ marginBottom:24, display:"inline-flex" }}>
         {tabs.map(t=>(
