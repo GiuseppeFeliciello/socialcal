@@ -571,11 +571,9 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
 
   useEffect(() => {
     setTimeout(() => {
-      const container = scrollRef.current;
-      if (!container) return;
-      const el = container.querySelector("[data-today]");
+      const el = document.querySelector("[data-today]");
       if (el) el.scrollIntoView({ block: "center" });
-    }, 200);
+    }, 300);
   }, []);
 
   useEffect(() => {
@@ -592,14 +590,16 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
     if (view==="week") { const d=new Date(weekStart); d.setDate(d.getDate()+7); setWeekStart(d); }
     else { month===11?(setMonth(0),setYear(y=>y+1)):setMonth(m=>m+1); }
   }
+  function scrollToToday() {
+    setTimeout(()=>{
+      const el = document.querySelector("[data-today]");
+      if (el) el.scrollIntoView({behavior:"smooth", block:"center"});
+    }, 100);
+  }
+
   function goToday() {
     const n=new Date(); setYear(n.getFullYear()); setMonth(n.getMonth());
-    setTimeout(()=>{
-      const container = scrollRef.current;
-      if (!container) return;
-      const el = container.querySelector("[data-today]");
-      if (el) el.scrollIntoView({behavior:"smooth", block:"center"});
-    }, 80);
+    scrollToToday();
   }
 
   function postsFor(ds) { return posts.filter(p=>p.date===ds); }
