@@ -477,7 +477,7 @@ function Dashboard({ posts, clients, onDeletePost, onSavePost, lbl }) {
           </div>
           {filtered.length===0
             ? <EmptyState icon="fileText" text="Nessun post trovato"/>
-            : <div style={{display:"flex",flexDirection:"column",gap:6}}>{filtered.map(p=><PostRowComp key={p.id} post={p} clients={clients} onDeletePost={onDeletePost} onSavePost={onSavePost}/>)}</div>}
+            : <div style={{display:"flex",flexDirection:"column",gap:6}}>{filtered.map(p=><PostRowComp key={p.id} post={p} clients={clients} onDeletePost={onDeletePost}/>)}</div>}
         </div>
       )}
 
@@ -504,42 +504,16 @@ function Dashboard({ posts, clients, onDeletePost, onSavePost, lbl }) {
           <div style={{ fontWeight:600, fontSize:"var(--fs)", marginBottom:13 }}>Prossimi Post</div>
           {upcoming.length===0
             ? <EmptyState icon="calendar" text="Nessun post in programma"/>
-            : <div style={{display:"flex",flexDirection:"column",gap:6}}>{upcoming.map(p=><PostRowComp key={p.id} post={p} clients={clients} onDeletePost={onDeletePost} onSavePost={onSavePost} compact/>)}</div>}
+            : <div style={{display:"flex",flexDirection:"column",gap:6}}>{upcoming.map(p=><PostRowComp key={p.id} post={p} clients={clients} onDeletePost={onDeletePost} compact/>)}</div>}
         </div>
       </div>
     </div>
   );
 }
 
-function PostRowComp({ post, clients, onDeletePost, onSavePost, compact }) {
+function PostRowComp({ post, clients, onDeletePost, compact }) {
   const sc = STATUS_COLORS[post.status] || STATUS_COLORS["Da Editare"];
   const cl = clients?.find(c => c.id === post.clientId);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [menuPos,  setMenuPos]  = useState({x:0,y:0});
-  const justOpened = useRef(false);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    function close() {
-      if (justOpened.current) { justOpened.current = false; return; }
-      setMenuOpen(false);
-    }
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, [menuOpen]);
-
-  function openMenu(e) {
-    e.stopPropagation();
-    const r = e.currentTarget.getBoundingClientRect();
-    setMenuPos({x:r.left, y:r.bottom+4, width:r.width});
-    justOpened.current = true;
-    setMenuOpen(true);
-  }
-
-  async function changeStatus(s) {
-    if (onSavePost) await onSavePost({...post, status:s});
-    setMenuOpen(false);
-  }
 
   const socTimes = [
     post.igStatus && post.igStatus!=="—" && post.igStatusTime ? `IG ${post.igStatusTime}` : null,
@@ -548,7 +522,7 @@ function PostRowComp({ post, clients, onDeletePost, onSavePost, compact }) {
   ].filter(Boolean);
 
   return (
-    <div className="post-row" style={{position:"relative"}}>
+    <div className="post-row">
       {cl && <div style={{ width:4, height:32, borderRadius:3, background:cl.color, flexShrink:0 }}/>}
       <div style={{ flex:1, minWidth:0 }}>
         <div style={{ fontSize:"var(--fs-sm)", fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
@@ -561,39 +535,9 @@ function PostRowComp({ post, clients, onDeletePost, onSavePost, compact }) {
           }
         </div>
       </div>
-      <button
-        onClick={e => { e.stopPropagation(); if(onSavePost) openMenu(e); }}
-        className="chip"
-        style={{ background:sc.light, color:sc.text, border:`1.5px solid ${sc.bg}44`,
-          flexShrink:0, cursor:onSavePost?"pointer":"default", transition:"var(--transition)",
-          whiteSpace:"nowrap" }}
-        onMouseEnter={e=>onSavePost&&(e.currentTarget.style.background=sc.bg,e.currentTarget.style.color="#fff")}
-        onMouseLeave={e=>onSavePost&&(e.currentTarget.style.background=sc.light,e.currentTarget.style.color=sc.text)}>
+      <span className="chip" style={{ background:sc.light, color:sc.text, borderColor:sc.bg+"44", flexShrink:0, whiteSpace:"nowrap" }}>
         {post.status}
-      </button>
-      {menuOpen && (
-        <div style={{position:"fixed",left:menuPos.x,top:menuPos.y,zIndex:9999,
-          background:"var(--surface)",border:"1.5px solid var(--border)",
-          borderRadius:10,boxShadow:"var(--shadow2)",overflow:"hidden",minWidth:145}}
-          onClick={e=>e.stopPropagation()}>
-          {POST_STATUSES.map(s=>{
-            const ssc=STATUS_COLORS[s]||STATUS_COLORS["Da Editare"];
-            const isActive=s===post.status;
-            return(
-              <div key={s} onClick={()=>changeStatus(s)}
-                style={{padding:"7px 12px",display:"flex",alignItems:"center",gap:8,
-                  cursor:"pointer",fontSize:"var(--fs-sm)",fontWeight:600,
-                  background:isActive?"var(--surface2)":"transparent",transition:"background .1s"}}
-                onMouseEnter={e=>!isActive&&(e.currentTarget.style.background="var(--surface2)")}
-                onMouseLeave={e=>!isActive&&(e.currentTarget.style.background="transparent")}>
-                <div style={{width:8,height:8,borderRadius:"50%",background:ssc.bg,flexShrink:0}}/>
-                <span style={{color:ssc.text}}>{s}</span>
-                {isActive&&<div style={{marginLeft:"auto",width:6,height:6,borderRadius:"50%",background:"var(--accent)"}}/>}
-              </div>
-            );
-          })}
-        </div>
-      )}
+      </span>
       <button className="btn btn-icon btn-danger" style={{ flexShrink:0, opacity:.65 }}
         onClick={e => { e.stopPropagation(); onDeletePost(post.id); }}>
         <Icon name="trash" size={13}/>
