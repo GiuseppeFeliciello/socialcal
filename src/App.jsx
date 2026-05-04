@@ -31,6 +31,13 @@ const Icon = ({ name, size = 16, color = "currentColor" }) => {
     tag: <><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></>,
     hash: <><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></>,
     messageCircle: <><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></>,
+    euro: <><path d="M4 10h12M4 14h12M19 6a7 7 0 1 0 0 12"/></>,
+    trendUp: <><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></>,
+    trendDown: <><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></>,
+    receipt: <><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="14" y2="16"/></>,
+    repeat: <><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></>,
+    arrowUp: <><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></>,
+    arrowDown: <><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></>,
     fileText: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></>,
     palette: <><circle cx="13.5" cy="6.5" r="1"/><circle cx="17.5" cy="10.5" r="1"/><circle cx="8.5" cy="7.5" r="1"/><circle cx="6.5" cy="12.5" r="1"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></>,
   };
@@ -206,11 +213,12 @@ export default function App() {
   const postsCol   = useCollection("posts");
   const labelsCol  = useCollection("labels");
   const memoryCol  = useCollection("memory");
+  const financeCol = useCollection("finance");
 
   // Local-only state (per device)
   const [currentUser, setCurrentUser] = useLS("scm_current", null);
-  const [fontId,      setFontId]      = useLS("scm_font",    "outfit");
-  const [fontSizeId,  setFontSizeId]  = useLS("scm_fsize",   "md");
+  const [fontId,      setFontId]      = useLS("scm_font",    "poppins");
+  const [fontSizeId,  setFontSizeId]  = useLS("scm_fsize",   "lg");
   const [section, setSection] = useState("dashboard");
 
   // Loading state
@@ -234,6 +242,18 @@ export default function App() {
     if (!val?.trim()) return;
     const updated = { ...memoryDoc, [type]: [...new Set([val, ...(memoryDoc[type] || [])])].slice(0, 30) };
     await memoryCol.save(updated);
+  }
+
+  const finance = financeCol.data || [];
+  async function saveFinanceDoc(doc)   { await financeCol.save(doc); }
+  async function deleteFinanceDoc(id)  { await financeCol.remove(id); }
+
+  // Finance memory: descriptions, categories stored in a single doc
+  const finMemDoc = (financeCol.data || []).find(d => d.id === "__mem__") || { id:"__mem__", descriptions:[], categories:[] };
+  async function addFinMemory(type, val) {
+    if (!val?.trim()) return;
+    const updated = { ...finMemDoc, [type]: [...new Set([val, ...(finMemDoc[type] || [])])].slice(0, 50) };
+    await financeCol.save(updated);
   }
 
   // Wrapped setters that sync to Firestore
@@ -283,6 +303,7 @@ export default function App() {
     { id: "calendar",  icon: "calendar", label: lbl("nav_calendar",  "Calendario") },
     { id: "posts",     icon: "pen",      label: lbl("nav_posts",     "Post") },
     { id: "clients",   icon: "users",    label: lbl("nav_clients",   "Clienti") },
+    { id: "finance",   icon: "euro",     label: lbl("nav_finance",   "Gestionale") },
     ...(isAdmin ? [{ id: "settings", icon: "settings", label: lbl("nav_settings", "Impostazioni") }] : []),
   ];
 
@@ -331,6 +352,7 @@ export default function App() {
           onSavePost={savePost} onDeletePost={deletePost} lbl={lbl} memory={memoryDoc} addMemory={addMemory} user={user} />}
         {section==="clients"   && <ClientsSection clients={clients}
           onSaveClient={saveClient} onDeleteClient={deleteClient} posts={posts} lbl={lbl} />}
+        {section==="finance"   && <FinanceSection clients={clients} finance={finance} saveFinanceDoc={saveFinanceDoc} deleteFinanceDoc={deleteFinanceDoc} finMemDoc={finMemDoc} addFinMemory={addFinMemory} lbl={lbl}/>}
         {section==="settings"  && isAdmin && (
           <Settings users={users} onSaveUser={saveUser} onDeleteUser={deleteUser}
             lbl={lbl} setLbl={setLbl} currentUser={currentUser}
@@ -1730,6 +1752,524 @@ function SugInput({ value, onChange, suggestions, placeholder, multiline }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ─── FINANCE SECTION ────────────────────────────────────────────────────── */
+function FinanceSection({ clients, finance, saveFinanceDoc, deleteFinanceDoc, finMemDoc, addFinMemory, lbl }) {
+  const [tab, setTab] = useState("overview");
+  const [showForm, setShowForm] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [filterMonth, setFilterMonth] = useState(() => {
+    const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`;
+  });
+
+  const CATEGORIES_IN  = ["Canone mensile","Consulenza","Progetto una tantum","Rimborso","Altro"];
+  const CATEGORIES_OUT = ["Strumenti lavoro","Pubblicità cliente","Formazione","Spese generali","Tasse","Altro"];
+  const INVOICE_STATES = ["Bozza","Inviata","Pagata","Scaduta"];
+  const INV_COLORS = {
+    "Bozza":   { bg:"#E6F1FB", text:"#0C447C" },
+    "Inviata": { bg:"#FAEEDA", text:"#633806" },
+    "Pagata":  { bg:"#EAF3DE", text:"#3B6D11" },
+    "Scaduta": { bg:"#FCEBEB", text:"#791F1F" },
+  };
+
+  // Filter out memory doc
+  const allDocs    = finance.filter(d => d.id !== "__mem__");
+  const txns       = allDocs.filter(d => d.type === "transaction");
+  const invoices   = allDocs.filter(d => d.type === "invoice");
+  const canoni     = allDocs.filter(d => d.type === "canone");
+
+  const monthTxns  = txns.filter(t => t.date?.startsWith(filterMonth));
+  const entrate    = monthTxns.filter(t => t.direction === "in").reduce((s,t) => s + (parseFloat(t.amount)||0), 0);
+  const uscite     = monthTxns.filter(t => t.direction === "out").reduce((s,t) => s + (parseFloat(t.amount)||0), 0);
+  const daIncassare = invoices.filter(i => i.state === "Inviata").reduce((s,i) => s + (parseFloat(i.amount)||0), 0);
+  const scadute    = invoices.filter(i => i.state === "Scaduta").reduce((s,i) => s + (parseFloat(i.amount)||0), 0);
+  const totCanoni  = canoni.reduce((s,c) => s + (parseFloat(c.amount)||0), 0);
+
+  function fmt(n) { return "€ " + Number(n).toLocaleString("it-IT", {minimumFractionDigits:0, maximumFractionDigits:2}); }
+  function clientColor(id) { return clients.find(c=>c.id===id)?.color || "#94a3b8"; }
+  function clientName(id)  { return clients.find(c=>c.id===id)?.name  || "—"; }
+
+  const tabs = [
+    { id:"overview",     label:"Panoramica" },
+    { id:"transactions", label:"Transazioni" },
+    { id:"invoices",     label:"Fatture" },
+    { id:"canoni",       label:"Canoni" },
+  ];
+
+  // Months for filter
+  const months = [];
+  const now = new Date();
+  for (let i=0; i<12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    months.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
+  }
+  function monthLabel(m) {
+    const [y,mo] = m.split("-");
+    return `${MONTHS_IT[parseInt(mo)-1]} ${y}`;
+  }
+
+  return (
+    <div style={{ padding:"clamp(14px,4vw,32px)" }}>
+      <div className="section-header">
+        <h1 className="page-title">{lbl("finance_title","Gestionale Finanziario")}</h1>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          {tab==="transactions" && (
+            <select className="input" value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} style={{maxWidth:180}}>
+              {months.map(m=><option key={m} value={m}>{monthLabel(m)}</option>)}
+            </select>
+          )}
+          <button className="btn btn-primary" onClick={()=>{setEditItem(null);setShowForm(true);}}>
+            <Icon name="plus" size={14}/>
+            {tab==="transactions"?"Nuova Transazione":tab==="invoices"?"Nuova Fattura":tab==="canoni"?"Nuovo Canone":"Aggiungi"}
+          </button>
+        </div>
+      </div>
+
+      {/* KPI */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:22}}>
+        {[
+          { label:"Entrate "+monthLabel(filterMonth), val:entrate,     color:"var(--accent)",  icon:"arrowUp"   },
+          { label:"Uscite "+monthLabel(filterMonth),  val:uscite,      color:"var(--danger)",  icon:"arrowDown" },
+          { label:"Margine netto",                    val:entrate-uscite, color:"#185FA5",     icon:"trendUp"   },
+          { label:"Da incassare",                     val:daIncassare, color:"var(--warn)",    icon:"receipt"   },
+          { label:"Fatture scadute",                  val:scadute,     color:"var(--danger)",  icon:"receipt"   },
+          { label:"Canoni mensili",                   val:totCanoni,   color:"#6366f1",        icon:"repeat"    },
+        ].map((k,i) => (
+          <div key={i} className="stat-card" style={{cursor:"default",padding:"14px 16px"}}>
+            <Icon name={k.icon} size={16} color={k.color}/>
+            <div style={{fontSize:"var(--fs-xl)",fontWeight:700,color:k.color,margin:"6px 0 2px",lineHeight:1}}>{fmt(k.val)}</div>
+            <div style={{fontSize:"var(--fs-xs)",color:"var(--text3)",fontWeight:500}}>{k.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Tabs */}
+      <div className="pill-tabs" style={{display:"inline-flex",marginBottom:20}}>
+        {tabs.map(t=>(
+          <button key={t.id} className={"pill-tab"+(tab===t.id?" active":"")} onClick={()=>setTab(t.id)}>{t.label}</button>
+        ))}
+      </div>
+
+      {/* ── PANORAMICA ── */}
+      {tab==="overview" && (
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:18}}>
+          <div className="card" style={{padding:0,overflow:"hidden"}}>
+            <div style={{padding:"11px 16px",background:"var(--surface2)",borderBottom:"1.5px solid var(--border)",fontWeight:600,fontSize:"var(--fs)"}}>Riepilogo per cliente</div>
+            {clients.map(c => {
+              const cTxns = txns.filter(t=>t.clientId===c.id&&t.direction==="in");
+              const cTotal = cTxns.reduce((s,t)=>s+(parseFloat(t.amount)||0),0);
+              const cInv   = invoices.filter(i=>i.clientId===c.id);
+              const cPagato= cInv.filter(i=>i.state==="Pagata").reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
+              const cTot   = cInv.reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
+              const pct    = cTot>0 ? Math.round(cPagato/cTot*100) : 0;
+              const hasScaduta = cInv.some(i=>i.state==="Scaduta");
+              if (!cTot && !cTotal) return null;
+              return (
+                <div key={c.id} style={{padding:"12px 16px",borderBottom:"1px solid var(--border)"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
+                    <div style={{width:8,height:8,borderRadius:"50%",background:c.color}}/>
+                    <span style={{fontWeight:600,fontSize:"var(--fs-sm)",flex:1}}>{c.name}</span>
+                    <span style={{fontWeight:600,fontSize:"var(--fs-sm)"}}>{fmt(cTot||cTotal)}</span>
+                    <span className="chip" style={{background:hasScaduta?"var(--dangerbg)":"var(--accentbg)",color:hasScaduta?"var(--danger)":"var(--accent)",borderColor:"transparent",fontSize:"var(--fs-xs)"}}>
+                      {hasScaduta?"Scaduta":pct===100?"Saldato":pct+"%"}
+                    </span>
+                  </div>
+                  {cTot>0 && (
+                    <div style={{height:4,borderRadius:99,background:"var(--surface2)",overflow:"hidden"}}>
+                      <div style={{height:"100%",width:pct+"%",background:hasScaduta?"var(--danger)":c.color,borderRadius:99,transition:"width .4s"}}/>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {clients.length===0&&<div className="empty-state" style={{padding:32}}><Icon name="users" size={28}/><p style={{marginTop:8}}>Nessun cliente</p></div>}
+          </div>
+
+          <div style={{display:"flex",flexDirection:"column",gap:16}}>
+            {/* Ultime transazioni */}
+            <div className="card" style={{padding:0,overflow:"hidden"}}>
+              <div style={{padding:"11px 16px",background:"var(--surface2)",borderBottom:"1.5px solid var(--border)",fontWeight:600,fontSize:"var(--fs)"}}>Ultime transazioni</div>
+              {txns.sort((a,b)=>b.date?.localeCompare(a.date)).slice(0,5).map(t=>(
+                <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderBottom:"1px solid var(--border)"}}>
+                  <div style={{width:26,height:26,borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:t.direction==="in"?"var(--accentbg)":"var(--dangerbg)"}}>
+                    <Icon name={t.direction==="in"?"arrowUp":"arrowDown"} size={12} color={t.direction==="in"?"var(--accent)":"var(--danger)"}/>
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:"var(--fs-sm)",fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.description||"—"}</div>
+                    <div style={{fontSize:"var(--fs-xs)",color:"var(--text3)"}}>{t.category}{t.payMethod&&t.payMethod!=="altro"?" · "+t.payMethod[0].toUpperCase()+t.payMethod.slice(1):""} · {t.date}</div>
+                  </div>
+                  <span style={{fontWeight:600,fontSize:"var(--fs-sm)",color:t.direction==="in"?"var(--accent)":"var(--danger)",flexShrink:0}}>
+                    {t.direction==="in"?"+":"-"}{fmt(t.amount)}
+                  </span>
+                </div>
+              ))}
+              {txns.length===0&&<div className="empty-state" style={{padding:24}}><p>Nessuna transazione</p></div>}
+            </div>
+
+            {/* Fatture in scadenza */}
+            <div className="card" style={{padding:0,overflow:"hidden"}}>
+              <div style={{padding:"11px 16px",background:"var(--surface2)",borderBottom:"1.5px solid var(--border)",fontWeight:600,fontSize:"var(--fs)"}}>Fatture da gestire</div>
+              {invoices.filter(i=>i.state!=="Pagata").sort((a,b)=>a.dueDate?.localeCompare(b.dueDate)).slice(0,4).map(i=>{
+                const ic=INV_COLORS[i.state]||INV_COLORS["Bozza"];
+                return(
+                  <div key={i.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderBottom:"1px solid var(--border)"}}>
+                    <div style={{width:8,height:8,borderRadius:"50%",background:clientColor(i.clientId),flexShrink:0}}/>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:"var(--fs-sm)",fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{i.description||clientName(i.clientId)}</div>
+                      <div style={{fontSize:"var(--fs-xs)",color:i.state==="Scaduta"?"var(--danger)":"var(--text3)"}}>Scad. {i.dueDate||"—"}</div>
+                    </div>
+                    <span style={{fontWeight:600,fontSize:"var(--fs-sm)",flexShrink:0}}>{fmt(i.amount)}</span>
+                    <span className="chip" style={{background:ic.bg,color:ic.text,borderColor:"transparent",fontSize:"var(--fs-xs)"}}>{i.state}</span>
+                  </div>
+                );
+              })}
+              {invoices.filter(i=>i.state!=="Pagata").length===0&&<div className="empty-state" style={{padding:24}}><p>Tutto a posto</p></div>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TRANSAZIONI ── */}
+      {tab==="transactions" && (
+        <div className="card" style={{padding:0,overflow:"hidden"}}>
+          <div style={{display:"grid",gridTemplateColumns:"28px 1fr 120px 90px 90px 60px",padding:"8px 14px",background:"var(--surface2)",borderBottom:"1.5px solid var(--border)",fontSize:"var(--fs-xs)",fontWeight:600,color:"var(--text3)",letterSpacing:".04em",textTransform:"uppercase",gap:8}}>
+            <span/>
+            <span>Descrizione</span>
+            <span>Categoria</span>
+            <span style={{textAlign:"right"}}>Importo</span>
+            <span style={{textAlign:"right"}}>Data</span>
+            <span/>
+          </div>
+          {monthTxns.length===0
+            ? <div className="empty-state" style={{padding:40}}><Icon name="receipt" size={32}/><p style={{marginTop:10}}>Nessuna transazione per {monthLabel(filterMonth)}</p></div>
+            : monthTxns.sort((a,b)=>b.date?.localeCompare(a.date)).map(t=>(
+              <div key={t.id} style={{display:"grid",gridTemplateColumns:"28px 1fr 120px 90px 90px 60px",padding:"10px 14px",borderBottom:"1px solid var(--border)",alignItems:"center",gap:8}}>
+                <div style={{width:26,height:26,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:t.direction==="in"?"var(--accentbg)":"var(--dangerbg)"}}>
+                  <Icon name={t.direction==="in"?"arrowUp":"arrowDown"} size={12} color={t.direction==="in"?"var(--accent)":"var(--danger)"}/>
+                </div>
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:"var(--fs-sm)",fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.description||"—"}</div>
+                  {t.clientId&&<div style={{fontSize:"var(--fs-xs)",color:clientColor(t.clientId),fontWeight:500}}>{clientName(t.clientId)}</div>}
+                </div>
+                <span style={{fontSize:"var(--fs-xs)",color:"var(--text2)"}}>{t.category}{t.payMethod&&t.payMethod!=="altro"?" · "+t.payMethod[0].toUpperCase()+t.payMethod.slice(1):""}</span>
+                <span style={{textAlign:"right",fontWeight:600,fontSize:"var(--fs-sm)",color:t.direction==="in"?"var(--accent)":"var(--danger)"}}>
+                  {t.direction==="in"?"+":"-"}{fmt(t.amount)}
+                </span>
+                <span style={{textAlign:"right",fontSize:"var(--fs-xs)",color:"var(--text3)"}}>{t.date}</span>
+                <div style={{display:"flex",gap:5,justifyContent:"flex-end"}}>
+                  <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>{setEditItem(t);setShowForm(true);}}><Icon name="edit" size={12}/></button>
+                  <button className="btn btn-danger btn-icon btn-sm" onClick={()=>deleteFinanceDoc(t.id)}><Icon name="trash" size={12}/></button>
+                </div>
+              </div>
+            ))
+          }
+          {monthTxns.length>0&&(
+            <div style={{padding:"9px 14px",background:"var(--surface2)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{display:"flex",gap:16,fontSize:"var(--fs-xs)",color:"var(--text2)"}}>
+                <span>Entrate: <strong style={{color:"var(--accent)"}}>{fmt(entrate)}</strong></span>
+                <span>Uscite: <strong style={{color:"var(--danger)"}}>{fmt(uscite)}</strong></span>
+              </div>
+              <span style={{fontWeight:600,fontSize:"var(--fs-sm)",color:entrate-uscite>=0?"#185FA5":"var(--danger)"}}>
+                Saldo: {fmt(entrate-uscite)}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── FATTURE ── */}
+      {tab==="invoices" && (
+        <div className="card" style={{padding:0,overflow:"hidden"}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 110px 90px 90px 90px 60px",padding:"8px 14px",background:"var(--surface2)",borderBottom:"1.5px solid var(--border)",fontSize:"var(--fs-xs)",fontWeight:600,color:"var(--text3)",letterSpacing:".04em",textTransform:"uppercase",gap:8}}>
+            <span>Cliente / Descrizione</span>
+            <span>Scadenza</span>
+            <span style={{textAlign:"right"}}>Importo</span>
+            <span style={{textAlign:"right"}}>IVA</span>
+            <span style={{textAlign:"center"}}>Stato</span>
+            <span/>
+          </div>
+          {invoices.length===0
+            ? <div className="empty-state" style={{padding:40}}><Icon name="receipt" size={32}/><p style={{marginTop:10}}>Nessuna fattura ancora</p></div>
+            : invoices.sort((a,b)=>b.dueDate?.localeCompare(a.dueDate)).map(i=>{
+              const ic=INV_COLORS[i.state]||INV_COLORS["Bozza"];
+              return(
+                <div key={i.id} style={{display:"grid",gridTemplateColumns:"1fr 110px 90px 90px 90px 60px",padding:"10px 14px",borderBottom:"1px solid var(--border)",alignItems:"center",gap:8}}>
+                  <div style={{minWidth:0}}>
+                    <div style={{fontSize:"var(--fs-sm)",fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{i.description||"—"}</div>
+                    {i.clientId&&<div style={{fontSize:"var(--fs-xs)",color:clientColor(i.clientId),fontWeight:500}}>{clientName(i.clientId)}</div>}
+                  </div>
+                  <span style={{fontSize:"var(--fs-xs)",color:i.state==="Scaduta"?"var(--danger)":"var(--text2)"}}>{i.dueDate||"—"}</span>
+                  <span style={{textAlign:"right",fontWeight:600,fontSize:"var(--fs-sm)"}}>{fmt(i.amount)}</span>
+                  <span style={{textAlign:"right",fontSize:"var(--fs-xs)",color:"var(--text3)"}}>{i.vat?fmt(parseFloat(i.amount||0)*parseFloat(i.vat||22)/100):"—"}</span>
+                  <div style={{display:"flex",justifyContent:"center"}}>
+                    <select value={i.state} onChange={async e=>{await saveFinanceDoc({...i,state:e.target.value});}}
+                      style={{fontSize:"var(--fs-xs)",fontWeight:600,padding:"2px 6px",borderRadius:99,border:`1.5px solid ${ic.bg}`,background:ic.bg,color:ic.text,fontFamily:"var(--font)",cursor:"pointer",outline:"none"}}>
+                      {INVOICE_STATES.map(s=><option key={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div style={{display:"flex",gap:5,justifyContent:"flex-end"}}>
+                    <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>{setEditItem(i);setShowForm(true);}}><Icon name="edit" size={12}/></button>
+                    <button className="btn btn-danger btn-icon btn-sm" onClick={()=>deleteFinanceDoc(i.id)}><Icon name="trash" size={12}/></button>
+                  </div>
+                </div>
+              );
+            })
+          }
+        </div>
+      )}
+
+      {/* ── CANONI ── */}
+      {tab==="canoni" && (
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:14}}>
+          {canoni.length===0&&<div className="empty-state card" style={{padding:40,gridColumn:"1/-1"}}><Icon name="repeat" size={32}/><p style={{marginTop:10}}>Nessun canone ricorrente</p></div>}
+          {canoni.map(c=>(
+            <div key={c.id} className="card" style={{overflow:"hidden"}}>
+              <div style={{height:4,background:clientColor(c.clientId)}}/>
+              <div style={{padding:16}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                  <div>
+                    <div style={{fontWeight:700,fontSize:"var(--fs-lg)",color:clientColor(c.clientId)}}>{clientName(c.clientId)}</div>
+                    {c.description&&<div style={{fontSize:"var(--fs-xs)",color:"var(--text3)",marginTop:2}}>{c.description}</div>}
+                  </div>
+                  <div style={{display:"flex",gap:5}}>
+                    <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>{setEditItem(c);setShowForm(true);}}><Icon name="edit" size={12}/></button>
+                    <button className="btn btn-danger btn-icon btn-sm" onClick={()=>deleteFinanceDoc(c.id)}><Icon name="trash" size={12}/></button>
+                  </div>
+                </div>
+                <div style={{fontSize:"var(--fs-xl)",fontWeight:700,color:"var(--accent)",marginBottom:6}}>{fmt(c.amount)} <span style={{fontSize:"var(--fs-xs)",color:"var(--text3)",fontWeight:400}}>/mese</span></div>
+                <div style={{fontSize:"var(--fs-xs)",color:"var(--text3)"}}>
+                  Pagamento: {c.payDay==="fine mese"?"Fine mese":c.payDay?`Giorno ${c.payDay}`:"—"}
+                </div>
+              </div>
+            </div>
+          ))}
+          <div className="card" style={{border:"1.5px dashed var(--border)",background:"transparent",display:"flex",alignItems:"center",justifyContent:"center",minHeight:120,cursor:"pointer",borderRadius:"var(--radius)"}}
+            onClick={()=>{setEditItem(null);setShowForm(true);}}>
+            <div style={{textAlign:"center",color:"var(--text3)"}}>
+              <Icon name="plus" size={20} color="var(--text3)"/>
+              <div style={{fontSize:"var(--fs-xs)",marginTop:6}}>Nuovo canone</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── FORM MODAL ── */}
+      {showForm && (
+        <FinanceForm
+          type={tab==="transactions"?"transaction":tab==="invoices"?"invoice":"canone"}
+          item={editItem}
+          clients={clients}
+          finMemDoc={finMemDoc}
+          addFinMemory={addFinMemory}
+          categoriesIn={CATEGORIES_IN}
+          categoriesOut={CATEGORIES_OUT}
+          onSave={async doc => {
+            const id = doc.id || genId();
+            await saveFinanceDoc({...doc, id, type: tab==="transactions"?"transaction":tab==="invoices"?"invoice":"canone"});
+            if (doc.description) addFinMemory("descriptions", doc.description);
+            if (doc.category)    addFinMemory("categories",   doc.category);
+            setShowForm(false); setEditItem(null);
+          }}
+          onClose={() => { setShowForm(false); setEditItem(null); }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ─── FINANCE FORM MODAL ─────────────────────────────────────────────────── */
+function FinanceForm({ type, item, clients, finMemDoc, addFinMemory, categoriesIn, categoriesOut, onSave, onClose }) {
+  const isEdit = !!item;
+  const [form, setForm] = useState(item || {
+    direction: "in", amount:"", description:"", category:"", date:today(),
+    clientId:"", dueDate:"", vat:"22", state:"Bozza", payDay:"", payMethod:"bonifico"
+  });
+  const [showDescSug, setShowDescSug] = useState(false);
+  const [showCatSug,  setShowCatSug]  = useState(false);
+
+  function upd(k,v) { setForm(f=>({...f,[k]:v})); }
+
+  const descSugs = (finMemDoc?.descriptions||[]).filter(s=>s!==form.description&&(!form.description||s.toLowerCase().includes(form.description.toLowerCase()))).slice(0,6);
+  const catSugs  = (finMemDoc?.categories||[]).filter(s=>s!==form.category).slice(0,6);
+  const cats     = form.direction==="in" ? categoriesIn : categoriesOut;
+
+  const titles = { transaction:"Transazione", invoice:"Fattura", canone:"Canone Ricorrente" };
+
+  return (
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal" style={{maxWidth:520}}>
+        <div style={{padding:"16px 20px",borderBottom:"1.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{fontWeight:700,fontSize:"var(--fs)"}}>{isEdit?"Modifica":"Nuova"} {titles[type]}</div>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><Icon name="x" size={14}/></button>
+        </div>
+        <div style={{padding:20,display:"flex",flexDirection:"column",gap:14}}>
+
+          {/* Tipo entrata/uscita — solo per transazioni */}
+          {type==="transaction" && (
+            <div className="field">
+              <label className="label">Tipo</label>
+              <div style={{display:"flex",gap:8}}>
+                {[{v:"in",label:"Entrata",color:"var(--accent)"},{v:"out",label:"Uscita",color:"var(--danger)"}].map(opt=>(
+                  <button key={opt.v} onClick={()=>upd("direction",opt.v)}
+                    style={{flex:1,padding:"8px",borderRadius:"var(--radius2)",border:`1.5px solid ${form.direction===opt.v?opt.color:"var(--border)"}`,
+                      background:form.direction===opt.v?opt.color+"15":"transparent",color:form.direction===opt.v?opt.color:"var(--text2)",
+                      cursor:"pointer",fontWeight:600,fontSize:"var(--fs-sm)",fontFamily:"var(--font)",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                    <Icon name={opt.v==="in"?"arrowUp":"arrowDown"} size={14} color={form.direction===opt.v?opt.color:"var(--text2)"}/>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Cliente */}
+          <div className="field">
+            <label className="label">Cliente</label>
+            <select className="input" value={form.clientId} onChange={e=>upd("clientId",e.target.value)}>
+              <option value="">Nessun cliente specifico</option>
+              {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+
+          {/* Descrizione con memory */}
+          <div className="field">
+            <label className="label">Descrizione</label>
+            <div style={{position:"relative"}}>
+              <input className="input" value={form.description} placeholder="es. Canone mensile maggio"
+                onChange={e=>upd("description",e.target.value)}
+                onFocus={()=>setShowDescSug(true)}
+                onBlur={()=>setTimeout(()=>setShowDescSug(false),160)}/>
+              {showDescSug && descSugs.length>0 && (
+                <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:200,background:"var(--surface)",border:"1.5px solid var(--border)",borderRadius:10,boxShadow:"var(--shadow2)",overflow:"hidden",marginTop:4}}>
+                  {descSugs.map((s,i)=>(
+                    <div key={i} onMouseDown={()=>upd("description",s)}
+                      style={{padding:"7px 12px",fontSize:"var(--fs-xs)",color:"var(--text2)",cursor:"pointer",borderBottom:i<descSugs.length-1?"1px solid var(--border)":"none"}}
+                      onMouseEnter={e=>e.currentTarget.style.background="var(--surface2)"}
+                      onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                      {s}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Importo + Data / Scadenza */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div className="field">
+              <label className="label">Importo (€)</label>
+              <input className="input" type="number" min="0" step="0.01" value={form.amount}
+                onChange={e=>upd("amount",e.target.value)} placeholder="0,00"/>
+            </div>
+            {type==="transaction" && (
+              <div className="field">
+                <label className="label">Data</label>
+                <input className="input" type="date" value={form.date} onChange={e=>upd("date",e.target.value)}/>
+              </div>
+            )}
+            {type==="invoice" && (
+              <div className="field">
+                <label className="label">Scadenza</label>
+                <input className="input" type="date" value={form.dueDate} onChange={e=>upd("dueDate",e.target.value)}/>
+              </div>
+            )}
+            {type==="canone" && (
+              <div className="field">
+                <label className="label">Giorno pagamento</label>
+                <select className="input" value={form.payDay} onChange={e=>upd("payDay",e.target.value)}>
+                  <option value="">Seleziona</option>
+                  <option value="fine mese">Fine mese</option>
+                  {Array.from({length:28},(_,i)=><option key={i+1} value={String(i+1)}>Giorno {i+1}</option>)}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Categoria — solo transazioni */}
+          {type==="transaction" && (
+            <div className="field">
+              <label className="label">Categoria</label>
+              <div style={{position:"relative"}}>
+                <input className="input" value={form.category} placeholder="es. Strumenti lavoro"
+                  onChange={e=>upd("category",e.target.value)}
+                  onFocus={()=>setShowCatSug(true)}
+                  onBlur={()=>setTimeout(()=>setShowCatSug(false),160)}/>
+                {showCatSug && (
+                  <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:200,background:"var(--surface)",border:"1.5px solid var(--border)",borderRadius:10,boxShadow:"var(--shadow2)",overflow:"hidden",marginTop:4}}>
+                    {[...new Set([...cats,...catSugs])].slice(0,8).map((s,i,arr)=>(
+                      <div key={i} onMouseDown={()=>upd("category",s)}
+                        style={{padding:"7px 12px",fontSize:"var(--fs-xs)",color:"var(--text2)",cursor:"pointer",borderBottom:i<arr.length-1?"1px solid var(--border)":"none"}}
+                        onMouseEnter={e=>e.currentTarget.style.background="var(--surface2)"}
+                        onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                        {s}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Metodo pagamento — transazioni e fatture */}
+          {(type==="transaction" || type==="invoice") && (
+            <div className="field">
+              <label className="label">Metodo di pagamento</label>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {[
+                  {id:"bonifico",  label:"Bonifico",  icon:"arrowRight"},
+                  {id:"contanti",  label:"Contanti",  icon:"tag"},
+                  {id:"carta",     label:"Carta",     icon:"fileText"},
+                  {id:"assegno",   label:"Assegno",   icon:"pen"},
+                  {id:"altro",     label:"Altro",     icon:"sliders"},
+                ].map(m=>(
+                  <button key={m.id} type="button"
+                    onClick={()=>upd("payMethod",m.id)}
+                    style={{display:"flex",alignItems:"center",gap:6,padding:"7px 13px",
+                      borderRadius:8,border:"1.5px solid",cursor:"pointer",transition:"var(--transition)",
+                      fontSize:"var(--fs-sm)",fontWeight:500,fontFamily:"var(--font)",
+                      background:form.payMethod===m.id?"var(--accentbg)":"var(--surface2)",
+                      borderColor:form.payMethod===m.id?"var(--accent)":"var(--border)",
+                      color:form.payMethod===m.id?"var(--accent)":"var(--text2)"}}>
+                    <Icon name={m.icon} size={13} color={form.payMethod===m.id?"var(--accent)":"var(--text3)"}/>
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* IVA — solo fatture */}
+          {type==="invoice" && (
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <div className="field">
+                <label className="label">IVA %</label>
+                <select className="input" value={form.vat} onChange={e=>upd("vat",e.target.value)}>
+                  <option value="">Esente / Non applicabile</option>
+                  <option value="4">4% (beni prima necessità)</option>
+                  <option value="10">10% (ridotta)</option>
+                  <option value="22">22% (ordinaria)</option>
+                </select>
+              </div>
+              <div className="field">
+                <label className="label">Stato</label>
+                <select className="input" value={form.state} onChange={e=>upd("state",e.target.value)}>
+                  {["Bozza","Inviata","Pagata","Scaduta"].map(s=><option key={s}>{s}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
+
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:4}}>
+            <button className="btn btn-ghost" onClick={onClose}>Annulla</button>
+            <button className="btn btn-primary" onClick={()=>onSave(form)} disabled={!form.amount}>
+              <Icon name="check" size={14}/> Salva
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
