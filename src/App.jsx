@@ -1761,9 +1761,7 @@ function FinanceSection({ clients, finance, saveFinanceDoc, deleteFinanceDoc, fi
   const [tab, setTab] = useState("overview");
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState(null);
-  const [filterMonth, setFilterMonth] = useState(() => {
-    const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`;
-  });
+  const [filterPeriod, setFilterPeriod] = useState("all"); // "all" | "month:YYYY-MM" | "quarter:YYYY-Q"
 
   const CATEGORIES_IN  = ["Canone mensile","Consulenza","Progetto una tantum","Rimborso","Altro"];
   const CATEGORIES_OUT = ["Strumenti lavoro","Pubblicità cliente","Formazione","Spese generali","Tasse","Altro"];
@@ -1781,9 +1779,20 @@ function FinanceSection({ clients, finance, saveFinanceDoc, deleteFinanceDoc, fi
   const invoices   = allDocs.filter(d => d.type === "invoice");
   const canoni     = allDocs.filter(d => d.type === "canone");
 
-  const monthTxns  = txns.filter(t => t.date?.startsWith(filterMonth));
-  const entrate    = monthTxns.filter(t => t.direction === "in").reduce((s,t) => s + (parseFloat(t.amount)||0), 0);
-  const uscite     = monthTxns.filter(t => t.direction === "out").reduce((s,t) => s + (parseFloat(t.amount)||0), 0);
+  function txnMatchesPeriod(t) {
+    if (filterPeriod === "all") return true;
+    if (filterPeriod.startsWith("month:")) return t.date?.startsWith(filterPeriod.slice(6));
+    if (filterPeriod.startsWith("quarter:")) {
+      const [y, q] = filterPeriod.slice(8).split("-Q");
+      const m = parseInt(t.date?.split("-")[1]);
+      const qStart = (parseInt(q)-1)*3+1;
+      return t.date?.startsWith(y) && m >= qStart && m <= qStart+2;
+    }
+    return true;
+  }
+  const filteredTxns = txns.filter(txnMatchesPeriod);
+  const entrate = filteredTxns.filter(t => t.direction === "in").reduce((s,t) => s + (parseFloat(t.amount)||0), 0);
+  const uscite  = filteredTxns.filter(t => t.direction === "out").reduce((s,t) => s + (parseFloat(t.amount)||0), 0);
   const daIncassare = invoices.filter(i => i.state === "Inviata").reduce((s,i) => s + (parseFloat(i.amount)||0), 0);
   const scadute    = invoices.filter(i => i.state === "Scaduta").reduce((s,i) => s + (parseFloat(i.amount)||0), 0);
   const totCanoni  = canoni.reduce((s,c) => s + (parseFloat(c.amount)||0), 0);
@@ -1799,17 +1808,7 @@ function FinanceSection({ clients, finance, saveFinanceDoc, deleteFinanceDoc, fi
     { id:"canoni",       label:"Canoni" },
   ];
 
-  // Months for filter
-  const months = [];
-  const now = new Date();
-  for (let i=0; i<12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
-    months.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
-  }
-  function monthLabel(m) {
-    const [y,mo] = m.split("-");
-    return `${MONTHS_IT[parseInt(mo)-1]} ${y}`;
-  }
+
 
   return (
     <div style={{ padding:"clamp(14px,4vw,32px)" }}>
@@ -1817,8 +1816,32 @@ function FinanceSection({ clients, finance, saveFinanceDoc, deleteFinanceDoc, fi
         <h1 className="page-title">{lbl("finance_title","Gestionale Finanziario")}</h1>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
           {tab==="transactions" && (
-            <select className="input" value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} style={{maxWidth:180}}>
-              {months.map(m=><option key={m} value={m}>{monthLabel(m)}</option>)}
+            <select className="input" value={filterPeriod} onChange={e=>setFilterPeriod(e.target.value)} style={{maxWidth:200}}>
+              <option value="all">Tutte le transazioni</option>
+              <optgroup label="Mese">
+                {(()=>{
+                  const opts=[]; const now=new Date();
+                  for(let i=0;i<24;i++){
+                    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+                    const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+                    opts.push(<option key={key} value={"month:"+key}>{MONTHS_IT[d.getMonth()]} {d.getFullYear()}</option>);
+                  }
+                  return opts;
+                })()}
+              </optgroup>
+              <optgroup label="Trimestre">
+                {(()=>{
+                  const opts=[]; const now=new Date();
+                  for(let i=0;i<8;i++){
+                    const q=Math.floor((now.getMonth()-i*3)/3+4)%4+1;
+                    const y=now.getFullYear()-Math.floor((i*3-now.getMonth()+3)/12);
+                    const key=`${y}-Q${q}`;
+                    const label=`T${q} ${y}`;
+                    if(!opts.find(o=>o.key===key)) opts.push(<option key={key} value={"quarter:"+key}>{label}</option>);
+                  }
+                  return opts;
+                })()}
+              </optgroup>
             </select>
           )}
           <button className="btn btn-primary" onClick={()=>{setEditItem(null);setShowForm(true);}}>
@@ -1943,9 +1966,9 @@ function FinanceSection({ clients, finance, saveFinanceDoc, deleteFinanceDoc, fi
             <span style={{textAlign:"right"}}>Data</span>
             <span/>
           </div>
-          {monthTxns.length===0
-            ? <div className="empty-state" style={{padding:40}}><Icon name="receipt" size={32}/><p style={{marginTop:10}}>Nessuna transazione per {monthLabel(filterMonth)}</p></div>
-            : monthTxns.sort((a,b)=>b.date?.localeCompare(a.date)).map(t=>(
+          {filteredTxns.length===0
+            ? <div className="empty-state" style={{padding:40}}><Icon name="fileText" size={32}/><p style={{marginTop:10}}>Nessuna transazione nel periodo selezionato</p></div>
+            : filteredTxns.sort((a,b)=>b.date?.localeCompare(a.date)).map(t=>(
               <div key={t.id} style={{display:"grid",gridTemplateColumns:"28px 1fr 120px 90px 90px 60px",padding:"10px 14px",borderBottom:"1px solid var(--border)",alignItems:"center",gap:8}}>
                 <div style={{width:26,height:26,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:t.direction==="in"?"var(--accentbg)":"var(--dangerbg)"}}>
                   <Icon name={t.direction==="in"?"arrowUp":"arrowDown"} size={12} color={t.direction==="in"?"var(--accent)":"var(--danger)"}/>
@@ -1966,9 +1989,10 @@ function FinanceSection({ clients, finance, saveFinanceDoc, deleteFinanceDoc, fi
               </div>
             ))
           }
-          {monthTxns.length>0&&(
+          {filteredTxns.length>0&&(
             <div style={{padding:"9px 14px",background:"var(--surface2)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div style={{display:"flex",gap:16,fontSize:"var(--fs-xs)",color:"var(--text2)"}}>
+                <span style={{color:"var(--text3)"}}>{filteredTxns.length} transazioni</span>
                 <span>Entrate: <strong style={{color:"var(--accent)"}}>{fmt(entrate)}</strong></span>
                 <span>Uscite: <strong style={{color:"var(--danger)"}}>{fmt(uscite)}</strong></span>
               </div>
