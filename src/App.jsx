@@ -1854,8 +1854,8 @@ function FinanceSection({ clients, finance, saveFinanceDoc, deleteFinanceDoc, fi
       {/* KPI */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:22}}>
         {[
-          { label:"Entrate "+monthLabel(filterMonth), val:entrate,     color:"var(--accent)",  icon:"arrowUp"   },
-          { label:"Uscite "+monthLabel(filterMonth),  val:uscite,      color:"var(--danger)",  icon:"arrowDown" },
+          { label:"Entrate"+(filterPeriod!=="all"?" (periodo)":""), val:entrate, color:"var(--accent)",  icon:"arrowUp"   },
+          { label:"Uscite"+(filterPeriod!=="all"?" (periodo)":""),  val:uscite,  color:"var(--danger)",  icon:"arrowDown" },
           { label:"Margine netto",                    val:entrate-uscite, color:"#185FA5",     icon:"trendUp"   },
           { label:"Da incassare",                     val:daIncassare, color:"var(--warn)",    icon:"receipt"   },
           { label:"Fatture scadute",                  val:scadute,     color:"var(--danger)",  icon:"receipt"   },
