@@ -607,11 +607,22 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
     return STATUS_COLORS["Pronto"].bg;
   }
 
+
   // ── Dropdown pill ────────────────────────────────────────────────────────
   function PillDropdown({ postId, field, value, options, colorMap, small }) {
     const sc = colorMap[value] || null;
     const menuId = `${postId}_${field}`;
     const isOpen = openMenu?.id === menuId;
+    const isTimeOpen = openMenu?.id === `${postId}_${field}_time`;
+    const post = posts.find(p=>p.id===postId);
+    const timeField = field + "Time";
+    const timeVal = post?.[timeField] || "";
+    const isSocial = ["igStatus","fbStatus","ttStatus"].includes(field);
+    const showTime = isSocial && (value==="Programmato" || value==="Pubblicato");
+    const isPublished = value==="Pubblicato";
+    const [timePick, setTimePick] = useState({ h:"09", m:"00" });
+    const HOURS = Array.from({length:24},(_,i)=>String(i).padStart(2,"0"));
+    const MINS  = ["00","15","30","45"];
 
     function openIt(e) {
       e.stopPropagation();
@@ -619,41 +630,77 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
       setOpenMenu(isOpen ? null : { id:menuId, x:rect.left, y:rect.bottom+4, width:rect.width });
     }
 
+    function openTime(e) {
+      e.stopPropagation();
+      if (isPublished) return;
+      if (timeVal) { const [h,m]=timeVal.split(":"); setTimePick({h,m}); }
+      const rect = e.currentTarget.getBoundingClientRect();
+      setOpenMenu(isTimeOpen ? null : { id:`${postId}_${field}_time`, x:rect.left, y:rect.bottom+4, width:Math.max(rect.width,170) });
+    }
+
+    async function confirmTime(e) {
+      e.stopPropagation();
+      if (post) await changeSocial(post, timeField, `${timePick.h}:${timePick.m}`);
+      setOpenMenu(null);
+    }
+
     return (
-      <>
+      <div style={{display:"flex",flexDirection:"column",gap:3,width:"100%",position:"relative"}}>
+        {/* Status pill */}
         <div onClick={openIt}
-          style={{ display:"flex", alignItems:"center", justifyContent:"center", whiteSpace:"nowrap",
+          style={{ display:"flex", alignItems:"center", whiteSpace:"nowrap",
             padding:small?"3px 8px":"4px 10px", borderRadius:small?6:7,
             fontSize:small?"var(--fs-xs)":"var(--fs-sm)", fontWeight:600, cursor:"pointer",
             border:`1.5px solid ${sc?sc.bg+"55":"var(--border2)"}`,
             background:sc?sc.light:"transparent", color:sc?sc.text:"var(--text3)",
-            transition:"var(--transition)", userSelect:"none", width:"100%", gap:4 }}>
-          <span style={{flex:1, textAlign:"center"}}>{value}</span>
-          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{opacity:.5,flexShrink:0}}>
+            transition:"var(--transition)", userSelect:"none", width:"100%", gap:5 }}>
+          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{opacity:.4,flexShrink:0}}>
             <polyline points="6 9 12 15 18 9"/>
           </svg>
+          <span style={{flex:1}}>{value}</span>
         </div>
 
+        {/* Time row */}
+        {showTime && (
+          <div onClick={openTime}
+            style={{ display:"flex", alignItems:"center", gap:4, padding:"2px 7px",
+              borderRadius:6, background:"var(--surface2)", border:"1.5px solid var(--border)",
+              cursor:isPublished?"default":"pointer", opacity:isPublished?.65:1,
+              transition:"var(--transition)" }}
+            onMouseEnter={e=>!isPublished&&(e.currentTarget.style.borderColor="var(--accent)")}
+            onMouseLeave={e=>!isPublished&&(e.currentTarget.style.borderColor="var(--border)")}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{opacity:.4,flexShrink:0}}>
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+            <span style={{ fontSize:"var(--fs-xs)", fontWeight:timeVal?600:400, flex:1,
+              color:timeVal?"var(--text)":"var(--text3)" }}>
+              {timeVal || (isPublished?"—":"+ imposta orario")}
+            </span>
+            {!isPublished && timeVal && (
+              <span style={{fontSize:9,color:"var(--text3)"}}>✎</span>
+            )}
+          </div>
+        )}
+
+        {/* Status dropdown */}
         {isOpen && (
           <div style={{ position:"fixed", left:openMenu.x, top:openMenu.y, zIndex:9999,
             background:"var(--surface)", border:"1.5px solid var(--border)",
             borderRadius:10, boxShadow:"var(--shadow2)", overflow:"hidden",
-            minWidth:Math.max(openMenu.width, 130), animation:"fadeIn .1s ease" }}
+            minWidth:Math.max(openMenu.width,130), animation:"fadeIn .1s ease" }}
             onClick={e=>e.stopPropagation()}>
             {options.map(opt => {
               const osc = colorMap[opt];
               const isActive = opt === value;
               return (
-                <div key={opt} onClick={e=>{e.stopPropagation(); /* handled by parent */}}
-                  onMouseDown={e=>{e.stopPropagation();}}
+                <div key={opt}
                   onClick={e=>{e.stopPropagation(); setOpenMenu(null);
-                    if (field==="status") changeStatus({id:postId,...posts.find(p=>p.id===postId)}, opt);
-                    else changeSocial(posts.find(p=>p.id===postId), field, opt);
+                    if (field==="status") changeStatus(post, opt);
+                    else changeSocial(post, field, opt);
                   }}
                   style={{ padding:"8px 12px", display:"flex", alignItems:"center", gap:8,
                     cursor:"pointer", fontSize:"var(--fs-sm)", fontWeight:600,
-                    background:isActive?"var(--surface2)":"transparent",
-                    transition:"background .1s" }}
+                    background:isActive?"var(--surface2)":"transparent", transition:"background .1s" }}
                   onMouseEnter={e=>!isActive&&(e.currentTarget.style.background="var(--surface2)")}
                   onMouseLeave={e=>!isActive&&(e.currentTarget.style.background="transparent")}>
                   {osc
@@ -666,17 +713,51 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
             })}
           </div>
         )}
-      </>
+
+        {/* Time picker popup */}
+        {isTimeOpen && (
+          <div style={{ position:"fixed", left:openMenu.x, top:openMenu.y, zIndex:9999,
+            background:"var(--surface)", border:"1.5px solid var(--border)",
+            borderRadius:12, boxShadow:"var(--shadow2)", padding:14, minWidth:180,
+            animation:"fadeIn .1s ease" }}
+            onClick={e=>e.stopPropagation()}>
+            <div style={{fontSize:"var(--fs-xs)",color:"var(--text3)",fontWeight:600,
+              letterSpacing:".04em",textTransform:"uppercase",marginBottom:10}}>
+              Orario programmazione
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
+              <select value={timePick.h} onChange={e=>setTimePick(t=>({...t,h:e.target.value}))}
+                style={{flex:1,padding:"6px 6px",borderRadius:7,fontSize:"var(--fs-sm)",
+                  border:"1.5px solid var(--border)",background:"var(--surface2)",
+                  color:"var(--text)",fontFamily:"var(--font)"}}>
+                {HOURS.map(h=><option key={h}>{h}</option>)}
+              </select>
+              <span style={{fontSize:18,fontWeight:600,color:"var(--text2)"}}>:</span>
+              <select value={timePick.m} onChange={e=>setTimePick(t=>({...t,m:e.target.value}))}
+                style={{flex:1,padding:"6px 6px",borderRadius:7,fontSize:"var(--fs-sm)",
+                  border:"1.5px solid var(--border)",background:"var(--surface2)",
+                  color:"var(--text)",fontFamily:"var(--font)"}}>
+                {MINS.map(m=><option key={m}>{m}</option>)}
+              </select>
+            </div>
+            <button onClick={confirmTime}
+              style={{width:"100%",padding:"8px",borderRadius:8,background:"var(--accent)",
+                color:"#fff",border:"none",cursor:"pointer",fontSize:"var(--fs-sm)",
+                fontWeight:600,fontFamily:"var(--font)"}}>
+              Conferma
+            </button>
+          </div>
+        )}
+      </div>
     );
   }
-
   const STATO_COLORS = { "Da Editare":STATUS_COLORS["Da Editare"], "Pronto":STATUS_COLORS["Pronto"] };
   const SOCIAL_COLORS = { "—":null, "Programmato":STATUS_COLORS["Programmato"], "Pubblicato":STATUS_COLORS["Pubblicato"] };
   // Dynamic grid columns based on window width
   const showSocial = winW >= 1100;
   const showTitle  = winW >= 900;
   const COLS = showSocial
-    ? "50px 110px 1fr 108px 118px 118px 118px"
+    ? "50px 110px 1fr 108px 150px 150px 150px"
     : showTitle
       ? "50px 110px 1fr 108px"
       : "50px 110px 108px";
@@ -783,13 +864,13 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
               </div>
 
               {/* Instagram */}
-              {showSocial && <div style={{borderRight:"1px solid var(--border)",padding:"0 7px",display:"flex",alignItems:"center",justifyContent:"center",overflow:"visible"}}>
+              {showSocial && <div style={{borderRight:"1px solid var(--border)",padding:"5px 7px",display:"flex",alignItems:"center",justifyContent:"center",overflow:"visible",minHeight:44}}>
                 <PillDropdown postId={p.id} field="igStatus" value={p.igStatus||"—"}
                   options={["—","Programmato","Pubblicato"]} colorMap={SOCIAL_COLORS} small/>
               </div>}
 
               {/* Facebook */}
-              {showSocial && <div style={{borderRight:"1px solid var(--border)",padding:"0 7px",display:"flex",alignItems:"center",justifyContent:"center",overflow:"visible"}}>
+              {showSocial && <div style={{borderRight:"1px solid var(--border)",padding:"5px 7px",display:"flex",alignItems:"center",justifyContent:"center",overflow:"visible",minHeight:44}}>
                 <PillDropdown postId={p.id} field="fbStatus" value={p.fbStatus||"—"}
                   options={["—","Programmato","Pubblicato"]} colorMap={SOCIAL_COLORS} small/>
               </div>}
