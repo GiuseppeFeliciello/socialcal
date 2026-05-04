@@ -32,6 +32,7 @@ const Icon = ({ name, size = 16, color = "currentColor" }) => {
     hash: <><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></>,
     messageCircle: <><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></>,
     euro: <><path d="M4 10h12M4 14h12M19 6a7 7 0 1 0 0 12"/></>,
+    clock: <><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>,
     trendUp: <><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></>,
     trendDown: <><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></>,
     receipt: <><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="14" y2="16"/></>,
@@ -1791,8 +1792,10 @@ function FinanceSection({ clients, finance, saveFinanceDoc, deleteFinanceDoc, fi
     return true;
   }
   const filteredTxns = txns.filter(txnMatchesPeriod);
-  const entrate = filteredTxns.filter(t => t.direction === "in").reduce((s,t) => s + (parseFloat(t.amount)||0), 0);
-  const uscite  = filteredTxns.filter(t => t.direction === "out").reduce((s,t) => s + (parseFloat(t.amount)||0), 0);
+  const entrate       = filteredTxns.filter(t => t.direction==="in").reduce((s,t) => s+(parseFloat(t.amount)||0), 0);
+  const entrateInc    = filteredTxns.filter(t => t.direction==="in" && t.collectStatus!=="da_incassare").reduce((s,t) => s+(parseFloat(t.amount)||0), 0);
+  const entrateAttesa = filteredTxns.filter(t => t.direction==="in" && t.collectStatus==="da_incassare").reduce((s,t) => s+(parseFloat(t.amount)||0), 0);
+  const uscite        = filteredTxns.filter(t => t.direction==="out").reduce((s,t) => s+(parseFloat(t.amount)||0), 0);
   const daIncassare = invoices.filter(i => i.state === "Inviata").reduce((s,i) => s + (parseFloat(i.amount)||0), 0);
   const scadute    = invoices.filter(i => i.state === "Scaduta").reduce((s,i) => s + (parseFloat(i.amount)||0), 0);
   const totCanoni  = canoni.reduce((s,c) => s + (parseFloat(c.amount)||0), 0);
@@ -1854,8 +1857,9 @@ function FinanceSection({ clients, finance, saveFinanceDoc, deleteFinanceDoc, fi
       {/* KPI */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:22}}>
         {[
-          { label:"Entrate"+(filterPeriod!=="all"?" (periodo)":""), val:entrate, color:"var(--accent)",  icon:"arrowUp"   },
-          { label:"Uscite"+(filterPeriod!=="all"?" (periodo)":""),  val:uscite,  color:"var(--danger)",  icon:"arrowDown" },
+          { label:"Incassato",    val:entrateInc,    color:"var(--accent)",  icon:"arrowUp"   },
+          { label:"Da incassare",  val:entrateAttesa, color:"#d97706",        icon:"clock"     },
+          { label:"Uscite",        val:uscite,        color:"var(--danger)",  icon:"arrowDown" },
           { label:"Margine netto",                    val:entrate-uscite, color:"#185FA5",     icon:"trendUp"   },
           { label:"Da incassare",                     val:daIncassare, color:"var(--warn)",    icon:"receipt"   },
           { label:"Fatture scadute",                  val:scadute,     color:"var(--danger)",  icon:"receipt"   },
@@ -1917,14 +1921,17 @@ function FinanceSection({ clients, finance, saveFinanceDoc, deleteFinanceDoc, fi
               <div style={{padding:"11px 16px",background:"var(--surface2)",borderBottom:"1.5px solid var(--border)",fontWeight:600,fontSize:"var(--fs)"}}>Ultime transazioni</div>
               {txns.sort((a,b)=>b.date?.localeCompare(a.date)).slice(0,5).map(t=>(
                 <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderBottom:"1px solid var(--border)"}}>
-                  <div style={{width:26,height:26,borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:t.direction==="in"?"var(--accentbg)":"var(--dangerbg)"}}>
-                    <Icon name={t.direction==="in"?"arrowUp":"arrowDown"} size={12} color={t.direction==="in"?"var(--accent)":"var(--danger)"}/>
+                  <div style={{width:26,height:26,borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",
+                    background:t.direction==="out"?"var(--dangerbg)":t.collectStatus==="da_incassare"?"#fffbeb":"var(--accentbg)"}}>
+                    <Icon name={t.direction==="in"?"arrowUp":"arrowDown"} size={12}
+                      color={t.direction==="out"?"var(--danger)":t.collectStatus==="da_incassare"?"#d97706":"var(--accent)"}/>
                   </div>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:"var(--fs-sm)",fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.description||"—"}</div>
                     <div style={{fontSize:"var(--fs-xs)",color:"var(--text3)"}}>{t.category}{t.payMethod&&t.payMethod!=="altro"?" · "+t.payMethod[0].toUpperCase()+t.payMethod.slice(1):""} · {t.date}</div>
                   </div>
-                  <span style={{fontWeight:600,fontSize:"var(--fs-sm)",color:t.direction==="in"?"var(--accent)":"var(--danger)",flexShrink:0}}>
+                  <span style={{fontWeight:600,fontSize:"var(--fs-sm)",flexShrink:0,
+                    color:t.direction==="out"?"var(--danger)":t.collectStatus==="da_incassare"?"#d97706":"var(--accent)"}}>
                     {t.direction==="in"?"+":"-"}{fmt(t.amount)}
                   </span>
                 </div>
@@ -1970,16 +1977,23 @@ function FinanceSection({ clients, finance, saveFinanceDoc, deleteFinanceDoc, fi
             ? <div className="empty-state" style={{padding:40}}><Icon name="fileText" size={32}/><p style={{marginTop:10}}>Nessuna transazione nel periodo selezionato</p></div>
             : filteredTxns.sort((a,b)=>b.date?.localeCompare(a.date)).map(t=>(
               <div key={t.id} style={{display:"grid",gridTemplateColumns:"28px 1fr 120px 90px 90px 60px",padding:"10px 14px",borderBottom:"1px solid var(--border)",alignItems:"center",gap:8}}>
-                <div style={{width:26,height:26,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:t.direction==="in"?"var(--accentbg)":"var(--dangerbg)"}}>
-                  <Icon name={t.direction==="in"?"arrowUp":"arrowDown"} size={12} color={t.direction==="in"?"var(--accent)":"var(--danger)"}/>
+                <div style={{width:26,height:26,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
+                  background:t.direction==="out"?"var(--dangerbg)":t.collectStatus==="da_incassare"?"#fffbeb":"var(--accentbg)"}}>
+                  <Icon name={t.direction==="in"?"arrowUp":"arrowDown"} size={12}
+                    color={t.direction==="out"?"var(--danger)":t.collectStatus==="da_incassare"?"#d97706":"var(--accent)"}/>
                 </div>
                 <div style={{minWidth:0}}>
                   <div style={{fontSize:"var(--fs-sm)",fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.description||"—"}</div>
                   {t.clientId&&<div style={{fontSize:"var(--fs-xs)",color:clientColor(t.clientId),fontWeight:500}}>{clientName(t.clientId)}</div>}
                 </div>
                 <span style={{fontSize:"var(--fs-xs)",color:"var(--text2)"}}>{t.category}{t.payMethod&&t.payMethod!=="altro"?" · "+t.payMethod[0].toUpperCase()+t.payMethod.slice(1):""}</span>
-                <span style={{textAlign:"right",fontWeight:600,fontSize:"var(--fs-sm)",color:t.direction==="in"?"var(--accent)":"var(--danger)"}}>
+                <span style={{textAlign:"right",fontWeight:600,fontSize:"var(--fs-sm)",
+                  color:t.direction==="out"?"var(--danger)":t.collectStatus==="da_incassare"?"#d97706":"var(--accent)"}}>
                   {t.direction==="in"?"+":"-"}{fmt(t.amount)}
+                  {t.direction==="in"&&t.collectStatus==="da_incassare"&&(
+                    <span style={{fontSize:"var(--fs-xs)",fontWeight:500,background:"#fffbeb",color:"#92400e",
+                      padding:"1px 5px",borderRadius:99,marginLeft:5}}>attesa</span>
+                  )}
                 </span>
                 <span style={{textAlign:"right",fontSize:"var(--fs-xs)",color:"var(--text3)"}}>{t.date}</span>
                 <div style={{display:"flex",gap:5,justifyContent:"flex-end"}}>
@@ -2109,7 +2123,7 @@ function FinanceForm({ type, item, clients, finMemDoc, addFinMemory, categoriesI
   const isEdit = !!item;
   const [form, setForm] = useState(item || {
     direction: "in", amount:"", description:"", category:"", date:today(),
-    clientId:"", dueDate:"", vat:"22", state:"Bozza", payDay:"", payMethod:"bonifico"
+    clientId:"", dueDate:"", vat:"22", state:"Bozza", payDay:"", payMethod:"bonifico", collectStatus:"incassato"
   });
   const [showDescSug, setShowDescSug] = useState(false);
   const [showCatSug,  setShowCatSug]  = useState(false);
@@ -2145,6 +2159,33 @@ function FinanceForm({ type, item, clients, finMemDoc, addFinMemory, categoriesI
                     {opt.label}
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Stato incasso — solo transazioni */}
+          {type==="transaction" && (
+            <div className="field">
+              <label className="label">Stato incasso</label>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>upd("collectStatus","incassato")}
+                  style={{flex:1,padding:"8px",borderRadius:"var(--radius2)",border:`1.5px solid ${form.collectStatus==="incassato"?"#22c55e":"var(--border)"}`,
+                    background:form.collectStatus==="incassato"?"#f0fdf4":"transparent",
+                    color:form.collectStatus==="incassato"?"#166534":"var(--text2)",
+                    cursor:"pointer",fontWeight:600,fontSize:"var(--fs-sm)",fontFamily:"var(--font)",
+                    display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  Incassato
+                </button>
+                <button onClick={()=>upd("collectStatus","da_incassare")}
+                  style={{flex:1,padding:"8px",borderRadius:"var(--radius2)",border:`1.5px solid ${form.collectStatus==="da_incassare"?"#f59e0b":"var(--border)"}`,
+                    background:form.collectStatus==="da_incassare"?"#fffbeb":"transparent",
+                    color:form.collectStatus==="da_incassare"?"#92400e":"var(--text2)",
+                    cursor:"pointer",fontWeight:600,fontSize:"var(--fs-sm)",fontFamily:"var(--font)",
+                    display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  Da incassare
+                </button>
               </div>
             </div>
           )}
