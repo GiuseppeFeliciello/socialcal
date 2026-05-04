@@ -511,28 +511,176 @@ function Dashboard({ posts, clients, onDeletePost, onSavePost, lbl }) {
   );
 }
 
-function PostRowComp({ post, clients, onDeletePost, compact }) {
+function PostRowComp({ post, clients, onDeletePost, onSavePost, compact }) {
   const sc = STATUS_COLORS[post.status] || STATUS_COLORS["Da Editare"];
   const cl = clients?.find(c => c.id === post.clientId);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPos,  setMenuPos]  = useState({x:0,y:0});
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function close() { setMenuOpen(false); }
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [menuOpen]);
+
+  function openMenu(e) {
+    e.stopPropagation();
+    const r = e.currentTarget.getBoundingClientRect();
+    setMenuPos({x:r.left, y:r.bottom+4});
+    setMenuOpen(m=>!m);
+  }
+
+  async function changeStatus(s) {
+    if (onSavePost) await onSavePost({...post, status:s});
+    setMenuOpen(false);
+  }
+
+  const socTimes = [
+    post.igStatus && post.igStatus!=="—" && post.igStatusTime ? `IG ${post.igStatusTime}` : null,
+    post.fbStatus && post.fbStatus!=="—" && post.fbStatusTime ? `FB ${post.fbStatusTime}` : null,
+    post.ttStatus && post.ttStatus!=="—" && post.ttStatusTime ? `TT ${post.ttStatusTime}` : null,
+  ].filter(Boolean);
+
   return (
-    <div className="post-row">
+    <div className="post-row" style={{position:"relative"}}>
       {cl && <div style={{ width:4, height:32, borderRadius:3, background:cl.color, flexShrink:0 }}/>}
       <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ fontSize:"var(--fs-sm)", fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{post.title||"Post senza titolo"}</div>
+        <div style={{ fontSize:"var(--fs-sm)", fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+          {post.title||"Post senza titolo"}
+        </div>
         <div style={{ fontSize:"var(--fs-xs)", color:"var(--text3)", marginTop:1 }}>
-          {compact ? fmtDate(post.date) : `${post.clientName||"—"} · ${fmtDate(post.date)} · ${post.platform||"—"}`}
+          {compact
+            ? <>{fmtDate(post.date)}{socTimes.length>0&&<span style={{marginLeft:6}}>{socTimes.join(" · ")}</span>}</>
+            : <>{post.clientName||"—"} · {fmtDate(post.date)} · {post.platform||"—"}{socTimes.length>0&&<span style={{marginLeft:6}}>{socTimes.join(" · ")}</span>}</>
+          }
         </div>
       </div>
-      <span className="chip" style={{ background:sc.light, color:sc.text, borderColor:sc.bg+"44", flexShrink:0 }}>{post.status}</span>
+      <button
+        onClick={onSavePost ? openMenu : undefined}
+        className="chip"
+        style={{ background:sc.light, color:sc.text, border:`1.5px solid ${sc.bg}44`,
+          flexShrink:0, cursor:onSavePost?"pointer":"default", transition:"var(--transition)" }}
+        onMouseEnter={e=>onSavePost&&(e.currentTarget.style.background=sc.bg,e.currentTarget.style.color="#fff")}
+        onMouseLeave={e=>onSavePost&&(e.currentTarget.style.background=sc.light,e.currentTarget.style.color=sc.text)}>
+        {post.status}
+        {onSavePost && <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{marginLeft:3,opacity:.6}}><polyline points="6 9 12 15 18 9"/></svg>}
+      </button>
+      {menuOpen && (
+        <div style={{position:"fixed",left:menuPos.x,top:menuPos.y,zIndex:9999,
+          background:"var(--surface)",border:"1.5px solid var(--border)",
+          borderRadius:10,boxShadow:"var(--shadow2)",overflow:"hidden",minWidth:145}}
+          onClick={e=>e.stopPropagation()}>
+          {POST_STATUSES.map(s=>{
+            const ssc=STATUS_COLORS[s]||STATUS_COLORS["Da Editare"];
+            const isActive=s===post.status;
+            return(
+              <div key={s} onClick={()=>changeStatus(s)}
+                style={{padding:"7px 12px",display:"flex",alignItems:"center",gap:8,
+                  cursor:"pointer",fontSize:"var(--fs-sm)",fontWeight:600,
+                  background:isActive?"var(--surface2)":"transparent",transition:"background .1s"}}
+                onMouseEnter={e=>!isActive&&(e.currentTarget.style.background="var(--surface2)")}
+                onMouseLeave={e=>!isActive&&(e.currentTarget.style.background="transparent")}>
+                <div style={{width:8,height:8,borderRadius:"50%",background:ssc.bg,flexShrink:0}}/>
+                <span style={{color:ssc.text}}>{s}</span>
+                {isActive&&<div style={{marginLeft:"auto",width:6,height:6,borderRadius:"50%",background:"var(--accent)"}}/>}
+              </div>
+            );
+          })}
+        </div>
+      )}
       <button className="btn btn-icon btn-danger" style={{ flexShrink:0, opacity:.65 }}
-        onClick={e=>{e.stopPropagation();onDeletePost(post.id);}}>
+        onClick={e => { e.stopPropagation(); onDeletePost(post.id); }}>
         <Icon name="trash" size={13}/>
       </button>
     </div>
   );
 }
+function Dashboard({ posts, clients, onDeletePost, onSavePost, lbl }) {
+  const now = new Date();
+  const mk  = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+  const thisMonth  = posts.filter(p => p.date?.startsWith(mk));
+  const byStatus   = s => posts.filter(p => p.status === s);
+  const inProgress = byStatus("Da Editare");
+  const upcoming   = posts.filter(p => p.date >= today()).sort((a,b) => a.date.localeCompare(b.date)).slice(0, 10);
+  const [filter, setFilter] = useState(null);
 
-/* ─── CALENDAR ───────────────────────────────────────────────────────────── */
+  const filtered =
+    filter==="thisMonth"  ? thisMonth :
+    filter==="clients"    ? posts :
+    filter==="scheduled"  ? byStatus("Programmato") :
+    filter==="inprogress" ? inProgress :
+    filter               ? byStatus(filter) : null;
+
+  const stats = [
+    { key:"clients",    icon:"users",    label:"Clienti Attivi",   value:clients.length,                color:"#6366f1" },
+    { key:"thisMonth",  icon:"calendar", label:"Post Questo Mese", value:thisMonth.length,               color:"var(--accent)" },
+    { key:"scheduled",  icon:"bell",     label:"Da Pubblicare",    value:byStatus("Programmato").length, color:"var(--warn)" },
+    { key:"inprogress", icon:"sliders",  label:"Da Editare",       value:inProgress.length,              color:"var(--danger)" },
+  ];
+
+  return (
+    <div style={{ padding:"clamp(14px,4vw,32px)" }}>
+      <div className="section-header">
+        <h1 className="page-title">{lbl("dash_title","Dashboard")}</h1>
+        <div style={{ fontSize:"var(--fs-xs)", color:"var(--text3)" }}>{DAYS_IT[now.getDay()]}, {fmtDate(today())}</div>
+      </div>
+
+      <div className="stat-grid" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:26 }}>
+        {stats.map(s => (
+          <div key={s.key} className={"stat-card"+(filter===s.key?" active":"")} onClick={()=>setFilter(filter===s.key?null:s.key)}>
+            <div style={{ marginBottom:10 }}><Icon name={s.icon} size={20} color={s.color} /></div>
+            <div style={{ fontSize:"var(--fs-2xl)", fontWeight:700, color:s.color, lineHeight:1 }}>{s.value}</div>
+            <div style={{ fontSize:"var(--fs-xs)", color:"var(--text2)", marginTop:5, fontWeight:500 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {filtered && (
+        <div className="card" style={{ padding:20, marginBottom:22 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:13 }}>
+            <div style={{ fontWeight:600, fontSize:"var(--fs)" }}>
+              {filter==="clients"?"Tutti i Post":filter==="thisMonth"?"Post questo mese":filter==="scheduled"?"Programmati":filter==="inprogress"?"Da Editare":`Stato: ${filter}`}
+              <span style={{ marginLeft:7, fontSize:"var(--fs-xs)", color:"var(--text3)", fontWeight:400 }}>({filtered.length})</span>
+            </div>
+            <button className="btn btn-ghost btn-sm" onClick={()=>setFilter(null)}><Icon name="x" size={12}/> Chiudi</button>
+          </div>
+          {filtered.length===0
+            ? <EmptyState icon="fileText" text="Nessun post trovato"/>
+            : <div style={{display:"flex",flexDirection:"column",gap:6}}>{filtered.map(p=><PostRowComp key={p.id} post={p} clients={clients} onDeletePost={onDeletePost} onSavePost={onSavePost}/>)}</div>}
+        </div>
+      )}
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
+        <div className="card" style={{ padding:20 }}>
+          <div style={{ fontWeight:600, fontSize:"var(--fs)", marginBottom:13 }}>Stato Post</div>
+          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+            {POST_STATUSES.map(s => {
+              const cnt = byStatus(s).length; const sc = STATUS_COLORS[s];
+              return (
+                <button key={s} onClick={()=>setFilter(filter===s?null:s)}
+                  style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 11px", borderRadius:8, border:"1.5px solid", borderColor:filter===s?sc.bg:"transparent", background:filter===s?sc.light:"var(--surface2)", cursor:"pointer", transition:"var(--transition)" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <div style={{ width:8, height:8, borderRadius:"50%", background:sc.bg }}/>
+                    <span style={{ fontSize:"var(--fs-sm)", fontWeight:500 }}>{s}</span>
+                  </div>
+                  <span style={{ fontSize:"var(--fs-sm)", fontWeight:700, color:sc.bg }}>{cnt}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="card" style={{ padding:20 }}>
+          <div style={{ fontWeight:600, fontSize:"var(--fs)", marginBottom:13 }}>Prossimi Post</div>
+          {upcoming.length===0
+            ? <EmptyState icon="calendar" text="Nessun post in programma"/>
+            : <div style={{display:"flex",flexDirection:"column",gap:6}}>{upcoming.map(p=><PostRowComp key={p.id} post={p} clients={clients} onDeletePost={onDeletePost} onSavePost={onSavePost} compact/>)}</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function useWindowWidth() {
   const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 1200);
   useEffect(() => {
