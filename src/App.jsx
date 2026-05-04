@@ -516,10 +516,14 @@ function PostRowComp({ post, clients, onDeletePost, onSavePost, compact }) {
   const cl = clients?.find(c => c.id === post.clientId);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos,  setMenuPos]  = useState({x:0,y:0});
+  const justOpened = useRef(false);
 
   useEffect(() => {
     if (!menuOpen) return;
-    function close() { setMenuOpen(false); }
+    function close() {
+      if (justOpened.current) { justOpened.current = false; return; }
+      setMenuOpen(false);
+    }
     document.addEventListener("click", close);
     return () => document.removeEventListener("click", close);
   }, [menuOpen]);
@@ -528,7 +532,8 @@ function PostRowComp({ post, clients, onDeletePost, onSavePost, compact }) {
     e.stopPropagation();
     const r = e.currentTarget.getBoundingClientRect();
     setMenuPos({x:r.left, y:r.bottom+4, width:r.width});
-    setMenuOpen(m=>!m);
+    justOpened.current = true;
+    setMenuOpen(true);
   }
 
   async function changeStatus(s) {
