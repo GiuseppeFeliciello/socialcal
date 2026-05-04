@@ -324,7 +324,7 @@ export default function App() {
 
       <main className="main-content" style={{ flex:1, overflowY:"auto", background:"var(--bg)", position:"relative" }}>
         {section==="dashboard" && <Dashboard posts={posts} clients={clients}
-          onDeletePost={deletePost} lbl={lbl} />}
+          onDeletePost={deletePost} onSavePost={savePost} lbl={lbl} />}
         {section==="calendar"  && <CalendarView posts={posts} clients={clients}
           onSavePost={savePost} onDeletePost={deletePost} lbl={lbl} memory={memoryDoc} addMemory={addMemory} />}
         {section==="posts"     && <PostsSection posts={posts} clients={clients}
@@ -426,7 +426,7 @@ function Login({ users, onLogin }) {
 }
 
 /* ─── DASHBOARD ──────────────────────────────────────────────────────────── */
-function Dashboard({ posts, clients, onDeletePost, lbl }) {
+function Dashboard({ posts, clients, onDeletePost, onSavePost, lbl }) {
   const now = new Date();
   const mk  = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
   const thisMonth  = posts.filter(p => p.date?.startsWith(mk));
@@ -477,7 +477,7 @@ function Dashboard({ posts, clients, onDeletePost, lbl }) {
           </div>
           {filtered.length===0
             ? <EmptyState icon="fileText" text="Nessun post trovato"/>
-            : <div style={{display:"flex",flexDirection:"column",gap:6}}>{filtered.map(p=><PostRowComp key={p.id} post={p} clients={clients} onDeletePost={onDeletePost}/>)}</div>}
+            : <div style={{display:"flex",flexDirection:"column",gap:6}}>{filtered.map(p=><PostRowComp key={p.id} post={p} clients={clients} onDeletePost={onDeletePost} onSavePost={onSavePost}/>)}</div>}
         </div>
       )}
 
@@ -504,7 +504,7 @@ function Dashboard({ posts, clients, onDeletePost, lbl }) {
           <div style={{ fontWeight:600, fontSize:"var(--fs)", marginBottom:13 }}>Prossimi Post</div>
           {upcoming.length===0
             ? <EmptyState icon="calendar" text="Nessun post in programma"/>
-            : <div style={{display:"flex",flexDirection:"column",gap:6}}>{upcoming.map(p=><PostRowComp key={p.id} post={p} clients={clients} onDeletePost={onDeletePost} compact/>)}</div>}
+            : <div style={{display:"flex",flexDirection:"column",gap:6}}>{upcoming.map(p=><PostRowComp key={p.id} post={p} clients={clients} onDeletePost={onDeletePost} onSavePost={onSavePost} compact/>)}</div>}
         </div>
       </div>
     </div>
@@ -662,22 +662,34 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
 
         {/* Time row */}
         {showTime && (
-          <div onClick={openTime}
-            style={{ display:"flex", alignItems:"center", gap:4, padding:"2px 7px",
-              borderRadius:6, background:"var(--surface2)", border:"1.5px solid var(--border)",
-              cursor:isPublished?"default":"pointer", opacity:isPublished?.65:1,
-              transition:"var(--transition)" }}
-            onMouseEnter={e=>!isPublished&&(e.currentTarget.style.borderColor="var(--accent)")}
-            onMouseLeave={e=>!isPublished&&(e.currentTarget.style.borderColor="var(--border)")}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{opacity:.4,flexShrink:0}}>
-              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-            </svg>
-            <span style={{ fontSize:"var(--fs-xs)", fontWeight:timeVal?600:400, flex:1,
-              color:timeVal?"var(--text)":"var(--text3)" }}>
-              {timeVal || (isPublished?"—":"+ imposta orario")}
-            </span>
+          <div style={{ display:"flex", alignItems:"center", gap:3 }}>
+            <div onClick={openTime}
+              style={{ display:"flex", alignItems:"center", gap:4, padding:"2px 7px",
+                borderRadius:6, background:"var(--surface2)", border:"1.5px solid var(--border)",
+                cursor:isPublished?"default":"pointer", opacity:isPublished?.65:1,
+                transition:"var(--transition)", flex:1 }}
+              onMouseEnter={e=>!isPublished&&(e.currentTarget.style.borderColor="var(--accent)")}
+              onMouseLeave={e=>!isPublished&&(e.currentTarget.style.borderColor="var(--border)")}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{opacity:.4,flexShrink:0}}>
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+              </svg>
+              <span style={{ fontSize:"var(--fs-xs)", fontWeight:timeVal?600:400, flex:1,
+                color:timeVal?"var(--text)":"var(--text3)" }}>
+                {timeVal || (isPublished?"—":"+ imposta orario")}
+              </span>
+              {!isPublished && timeVal && (
+                <span style={{fontSize:9,color:"var(--text3)"}}>✎</span>
+              )}
+            </div>
             {!isPublished && timeVal && (
-              <span style={{fontSize:9,color:"var(--text3)"}}>✎</span>
+              <div onClick={async e=>{e.stopPropagation();if(post)await changeSocial(post,timeField,"");}}
+                style={{width:18,height:18,borderRadius:5,display:"flex",alignItems:"center",
+                  justifyContent:"center",cursor:"pointer",flexShrink:0,
+                  color:"var(--text3)",transition:"var(--transition)"}}
+                onMouseEnter={e=>{e.currentTarget.style.background="var(--dangerbg)";e.currentTarget.style.color="var(--danger)";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color="var(--text3)";}}>
+                <Icon name="x" size={10}/>
+              </div>
             )}
           </div>
         )}
