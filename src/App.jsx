@@ -527,7 +527,7 @@ function PostRowComp({ post, clients, onDeletePost, onSavePost, compact }) {
   function openMenu(e) {
     e.stopPropagation();
     const r = e.currentTarget.getBoundingClientRect();
-    setMenuPos({x:r.left, y:r.bottom+4});
+    setMenuPos({x:r.left, y:r.bottom+4, width:r.width});
     setMenuOpen(m=>!m);
   }
 
@@ -557,14 +557,14 @@ function PostRowComp({ post, clients, onDeletePost, onSavePost, compact }) {
         </div>
       </div>
       <button
-        onClick={onSavePost ? openMenu : undefined}
+        onClick={e => { e.stopPropagation(); if(onSavePost) openMenu(e); }}
         className="chip"
         style={{ background:sc.light, color:sc.text, border:`1.5px solid ${sc.bg}44`,
-          flexShrink:0, cursor:onSavePost?"pointer":"default", transition:"var(--transition)" }}
+          flexShrink:0, cursor:onSavePost?"pointer":"default", transition:"var(--transition)",
+          whiteSpace:"nowrap" }}
         onMouseEnter={e=>onSavePost&&(e.currentTarget.style.background=sc.bg,e.currentTarget.style.color="#fff")}
         onMouseLeave={e=>onSavePost&&(e.currentTarget.style.background=sc.light,e.currentTarget.style.color=sc.text)}>
         {post.status}
-        {onSavePost && <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{marginLeft:3,opacity:.6}}><polyline points="6 9 12 15 18 9"/></svg>}
       </button>
       {menuOpen && (
         <div style={{position:"fixed",left:menuPos.x,top:menuPos.y,zIndex:9999,
@@ -711,16 +711,15 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
       <div style={{display:"flex",flexDirection:"column",gap:3,width:"100%",position:"relative"}}>
         {/* Status pill */}
         <div onClick={openIt}
-          style={{ display:"flex", alignItems:"center", whiteSpace:"nowrap",
-            padding:small?"3px 8px":"4px 10px", borderRadius:small?6:7,
+          style={{ display:"flex", alignItems:"center", justifyContent:"center",
+            padding:small?"3px 6px":"4px 8px", borderRadius:small?6:7,
             fontSize:small?"var(--fs-xs)":"var(--fs-sm)", fontWeight:600, cursor:"pointer",
             border:`1.5px solid ${sc?sc.bg+"55":"var(--border2)"}`,
             background:sc?sc.light:"transparent", color:sc?sc.text:"var(--text3)",
-            transition:"var(--transition)", userSelect:"none", width:"100%", gap:5 }}>
-          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{opacity:.4,flexShrink:0}}>
-            <polyline points="6 9 12 15 18 9"/>
-          </svg>
-          <span style={{flex:1}}>{value}</span>
+            transition:"var(--transition)", userSelect:"none", width:"100%",
+            whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis",
+            minWidth:0, boxSizing:"border-box" }}>
+          <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{value}</span>
         </div>
 
         {/* Time row */}
@@ -933,7 +932,7 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
               )}
 
               {/* Stato principale */}
-              <div style={{borderRight:"1px solid var(--border)",padding:"0 7px",display:"flex",alignItems:"center",justifyContent:"center",overflow:"visible"}}>
+              <div style={{borderRight:"1px solid var(--border)",padding:"0 5px",display:"flex",alignItems:"center",justifyContent:"center",overflow:"visible",minWidth:0}}>
                 <PillDropdown postId={p.id} field="status" value={p.status||"Da Editare"}
                   options={["Da Editare","Pronto"]} colorMap={STATO_COLORS}/>
               </div>
