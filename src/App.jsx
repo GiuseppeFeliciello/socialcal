@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useCollection } from "./useFirestore";
 
 /* ─── ICONS ──────────────────────────────────────────────────────────────── */
@@ -589,7 +589,11 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
   const [tooltip,     setTooltip]     = useState(null);
   const [editingTitle,setEditingTitle]= useState(null);
   const [openMenu,    setOpenMenu]    = useState(null); // {id, field, x, y}
-  const scrollRef = useRef(null);
+  const desktopScrollRef = useRef(null);
+  const mobileScrollRef = useRef(null);
+  const prevScrollHeightRef = useRef({ desktop: 0, mobile: 0 });
+  const [pastDays, setPastDays] = useState(14);
+  const [futureDays, setFutureDays] = useState(90);
 
   useEffect(() => {
     setTimeout(() => {
@@ -603,6 +607,31 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
     document.addEventListener("click", handleClick);
     return () => document.removeEventListener("click", handleClick);
   }, []);
+
+  useLayoutEffect(() => {
+    const d = desktopScrollRef.current;
+    if (d && prevScrollHeightRef.current.desktop) {
+      d.scrollTop += d.scrollHeight - prevScrollHeightRef.current.desktop;
+      prevScrollHeightRef.current.desktop = 0;
+    }
+    const m = mobileScrollRef.current;
+    if (m && prevScrollHeightRef.current.mobile) {
+      m.scrollTop += m.scrollHeight - prevScrollHeightRef.current.mobile;
+      prevScrollHeightRef.current.mobile = 0;
+    }
+  }, [pastDays]);
+
+  function handleScroll(el, which) {
+    if (!el) return;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    if (scrollHeight - scrollTop - clientHeight < 600) {
+      setFutureDays(f => f + 60);
+    }
+    if (scrollTop < 600) {
+      prevScrollHeightRef.current[which] = scrollHeight;
+      setPastDays(p => p + 60);
+    }
+  }
 
   function prev() {
     if (view==="week") { const d=new Date(weekStart); d.setDate(d.getDate()-7); setWeekStart(d); }
@@ -961,7 +990,18 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
     );
   }
 
-  const vertDays=(()=>{const days=[],s=new Date();s.setDate(s.getDate()-14);for(let i=0;i<90;i++){const d=new Date(s);d.setDate(s.getDate()+i);days.push(isoDate(d.getFullYear(),d.getMonth(),d.getDate()));}return days;})();
+  const vertDays=(()=>{
+    const days=[];
+    const s=new Date();
+    s.setDate(s.getDate()-pastDays);
+    const total=pastDays+futureDays;
+    for(let i=0;i<total;i++){
+      const d=new Date(s);
+      d.setDate(s.getDate()+i);
+      days.push(isoDate(d.getFullYear(),d.getMonth(),d.getDate()));
+    }
+    return days;
+  })();
   const periodLabel=view==="week"?`${fmtDate(weekDays[0])} – ${fmtDate(weekDays[6])}`:`${MONTHS_IT[month]} ${year}`;
 
   return (
@@ -1013,7 +1053,7 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
               </div>
             ))}
           </div>
-          <div id="cal-scroll-body" ref={scrollRef} style={{maxHeight:"calc(100vh - 260px)",overflowY:"auto"}}>
+          <div id="cal-scroll-body" ref={desktopScrollRef} onScroll={e=>handleScroll(e.currentTarget,"desktop")} style={{maxHeight:"calc(100vh - 260px)",overflowY:"auto"}}>
             {vertDays.map((ds,i)=>{
               const d=new Date(ds+"T00:00:00"), showSep=d.getDate()===1||i===0;
               return (
@@ -1097,14 +1137,15 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
           onSlotClick={ds=>setNewPostData({date:ds})}
           onClientSlotClick={(ds,c)=>setNewPostData({date:ds,clientId:c.id,clientName:c.name})}
           onPostClick={p=>setEditPost(p)}
-          scrollRef={scrollRef}/>
+          scrollRef={mobileScrollRef}
+          onScroll={e=>handleScroll(e.currentTarget,"mobile")}/>
       </div>
     </div>
   );
 }
 
 /* ─── MOBILE CALENDAR ────────────────────────────────────────────────────── */
-function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBorderColor, onSlotClick, onClientSlotClick, onPostClick, scrollRef }) {
+function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBorderColor, onSlotClick, onClientSlotClick, onPostClick, scrollRef, onScroll }) {
   const [expanded, setExpanded] = useState({});
 
   const PMAP = {
@@ -1177,7 +1218,7 @@ function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBo
   }
 
   return (
-    <div ref={scrollRef} style={{overflowY:"auto",maxHeight:"calc(100vh - 120px)"}}>
+    <div ref={scrollRef} onScroll={onScroll} style={{overflowY:"auto",maxHeight:"calc(100vh - 120px)"}}>
       {vertDays.map((ds,i)=>{
         const d=new Date(ds+"T00:00:00");
         const isToday=ds===today();
