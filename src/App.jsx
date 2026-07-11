@@ -199,9 +199,12 @@ function buildCSS(fontFamily, fontSize) {
       .modal-overlay { align-items: flex-end !important; padding: 0 !important; }
       .post-row { flex-wrap: wrap; }
       .cal-desktop { display: none !important; }
-      /* FIX: flex column (not block) so the inner scroll area can use flex:1 to fill remaining height */
-      .cal-mobile  { display: flex !important; flex-direction: column; }
-      .cal-page    { padding: 0 !important; }
+      /* FIX: block display; the inner scroll container uses an explicit
+         height (100dvh minus header heights) rather than flex, which is
+         far more reliable across Android Chrome / iOS Safari when the
+         parent chain includes other scrollable/overflow elements. */
+      .cal-mobile  { display: block !important; }
+      .cal-page    { padding: 0 !important; height: 100%; }
     }
     @media (min-width: 769px) {
       .mob-nav-bar  { display: none !important; }
@@ -603,23 +606,32 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
   const [futureDays, setFutureDays] = useState(90);
 
   // FIX: scroll to today inside the correct scrollable container instead of
-  // calling scrollIntoView on the document — this is what let it work on
-  // desktop (where the browser's own scroll happened to line up) but not
-  // inside the mobile scroll container.
-  function scrollToTodayIn(container) {
+  // calling scrollIntoView on the document (that only ever worked by luck on
+  // desktop, where the browser's own page scroll happened to line up — it
+  // never worked inside a nested scroll container like the mobile one).
+  //
+  // FIX: retry with rAF instead of a single fixed setTimeout. Rows for
+  // hundreds of days are rendered on mount; a flat 300ms delay sometimes
+  // fired before "[data-today]" existed in the DOM yet (slower devices,
+  // React concurrent rendering, etc.), which is why "today" wasn't always
+  // reached even on desktop. This retries every frame for up to ~2s.
+  function scrollToTodayIn(container, attempt = 0) {
     if (!container) return;
     const target = container.querySelector("[data-today]");
-    if (!target) return;
+    if (!target) {
+      if (attempt < 120) requestAnimationFrame(() => scrollToTodayIn(container, attempt + 1));
+      return;
+    }
     const targetRect = target.getBoundingClientRect();
     const containerRect = container.getBoundingClientRect();
     container.scrollTop += targetRect.top - containerRect.top - container.clientHeight / 3;
   }
 
   useEffect(() => {
-    setTimeout(() => {
+    requestAnimationFrame(() => {
       scrollToTodayIn(desktopScrollRef.current);
       scrollToTodayIn(mobileScrollRef.current);
-    }, 350);
+    });
   }, []);
 
   useEffect(() => {
@@ -662,15 +674,14 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
     else { month===11?(setMonth(0),setYear(y=>y+1)):setMonth(m=>m+1); }
   }
 
-  // FIX: goToday now scrolls inside the correct container per view instead
-  // of relying on document-level scrollIntoView, which never worked on the
-  // nested mobile scroll container.
+  // FIX: goToday scrolls inside the correct container per view, using the
+  // same rAF-retry helper as the initial mount scroll.
   function goToday() {
     const n=new Date(); setYear(n.getFullYear()); setMonth(n.getMonth());
-    setTimeout(()=>{
+    requestAnimationFrame(() => {
       scrollToTodayIn(desktopScrollRef.current);
       scrollToTodayIn(mobileScrollRef.current);
-    }, 80);
+    });
   }
 
   function postsFor(ds) { return posts.filter(p=>p.date===ds); }
@@ -1242,13 +1253,12 @@ function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBo
   }
 
   return (
-    /* FIX: use flex:1 + minHeight:0 (replacing maxHeight:calc(100vh - 120px))
-       plus -webkit-overflow-scrolling:touch and overscroll-behavior:contain
-       via id="cal-scroll-body-mobile", which is targeted by the CSS rule
-       above. maxHeight combined with nested overflow containers is a known
-       cause of frozen/stuck scrolling on iOS Safari/Chrome. */
+    /* FIX: explicit height (not flex) — 100dvh minus the mobile header (~52px)
+       minus the bottom nav bar (~64px). This works reliably on Android
+       Chrome and iOS Safari, unlike flex:1 inside ambiguous parent chains
+       which can collapse to 0 height and freeze/hide the scroll area. */
     <div id="cal-scroll-body-mobile" ref={scrollRef} onScroll={onScroll}
-      style={{overflowY:"auto",flex:1,minHeight:0}}>
+      style={{overflowY:"scroll",WebkitOverflowScrolling:"touch",height:"calc(100dvh - 118px - env(safe-area-inset-bottom, 0px))"}}>
       {vertDays.map((ds,i)=>{
         const d=new Date(ds+"T00:00:00");
         const isToday=ds===today();
