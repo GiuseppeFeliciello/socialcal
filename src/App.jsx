@@ -180,6 +180,12 @@ function buildCSS(fontFamily, fontSize) {
     .empty-state svg { margin-bottom: 12px; opacity: .4; }
     .empty-state p { font-size: var(--fs); }
 
+    /* FIX: iOS momentum scrolling on the two calendar scroll containers */
+    #cal-scroll-body, #cal-scroll-body-mobile {
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+    }
+
     /* ── RESPONSIVE MOBILE ── */
     @media (max-width: 768px) {
       .sidebar { display: none !important; }
@@ -193,8 +199,9 @@ function buildCSS(fontFamily, fontSize) {
       .modal-overlay { align-items: flex-end !important; padding: 0 !important; }
       .post-row { flex-wrap: wrap; }
       .cal-desktop { display: none !important; }
-      .cal-mobile  { display: block !important; }
-      .cal-page    { padding: 12px 0 !important; }
+      /* FIX: flex column (not block) so the inner scroll area can use flex:1 to fill remaining height */
+      .cal-mobile  { display: flex !important; flex-direction: column; }
+      .cal-page    { padding: 0 !important; }
     }
     @media (min-width: 769px) {
       .mob-nav-bar  { display: none !important; }
@@ -595,11 +602,24 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
   const [pastDays, setPastDays] = useState(14);
   const [futureDays, setFutureDays] = useState(90);
 
+  // FIX: scroll to today inside the correct scrollable container instead of
+  // calling scrollIntoView on the document — this is what let it work on
+  // desktop (where the browser's own scroll happened to line up) but not
+  // inside the mobile scroll container.
+  function scrollToTodayIn(container) {
+    if (!container) return;
+    const target = container.querySelector("[data-today]");
+    if (!target) return;
+    const targetRect = target.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    container.scrollTop += targetRect.top - containerRect.top - container.clientHeight / 3;
+  }
+
   useEffect(() => {
     setTimeout(() => {
-      const el = document.querySelector("[data-today]");
-      if (el) el.scrollIntoView({ block: "center" });
-    }, 300);
+      scrollToTodayIn(desktopScrollRef.current);
+      scrollToTodayIn(mobileScrollRef.current);
+    }, 350);
   }, []);
 
   useEffect(() => {
@@ -641,16 +661,16 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
     if (view==="week") { const d=new Date(weekStart); d.setDate(d.getDate()+7); setWeekStart(d); }
     else { month===11?(setMonth(0),setYear(y=>y+1)):setMonth(m=>m+1); }
   }
-  function scrollToToday() {
-    setTimeout(()=>{
-      const el = document.querySelector("[data-today]");
-      if (el) el.scrollIntoView({behavior:"smooth", block:"center"});
-    }, 100);
-  }
 
+  // FIX: goToday now scrolls inside the correct container per view instead
+  // of relying on document-level scrollIntoView, which never worked on the
+  // nested mobile scroll container.
   function goToday() {
     const n=new Date(); setYear(n.getFullYear()); setMonth(n.getMonth());
-    scrollToToday();
+    setTimeout(()=>{
+      scrollToTodayIn(desktopScrollRef.current);
+      scrollToTodayIn(mobileScrollRef.current);
+    }, 80);
   }
 
   function postsFor(ds) { return posts.filter(p=>p.date===ds); }
@@ -1124,8 +1144,12 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
       )}
 
       {/* ── MOBILE CALENDAR ── */}
-      <div className="cal-mobile" style={{display:"none"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px 8px",borderBottom:"1.5px solid var(--border)",background:"var(--surface)"}}>
+      {/* FIX: removed inline style={{display:"none"}} — this hard-coded inline
+          style overrode the CSS media queries on iOS Safari/Chrome, keeping
+          the mobile calendar permanently hidden regardless of viewport width.
+          Visibility is now controlled purely via the .cal-mobile CSS class. */}
+      <div className="cal-mobile">
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px 8px",borderBottom:"1.5px solid var(--border)",background:"var(--surface)",flexShrink:0}}>
           <span style={{fontSize:"var(--fs)",fontWeight:700,color:"var(--text)"}}>Calendario</span>
           <div style={{display:"flex",gap:7}}>
             <button className="btn btn-ghost btn-sm" onClick={goToday} style={{display:"flex",alignItems:"center",gap:4}}><Icon name="calendar" size={12}/> Oggi</button>
@@ -1218,7 +1242,13 @@ function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBo
   }
 
   return (
-    <div ref={scrollRef} onScroll={onScroll} style={{overflowY:"auto",maxHeight:"calc(100vh - 120px)"}}>
+    /* FIX: use flex:1 + minHeight:0 (replacing maxHeight:calc(100vh - 120px))
+       plus -webkit-overflow-scrolling:touch and overscroll-behavior:contain
+       via id="cal-scroll-body-mobile", which is targeted by the CSS rule
+       above. maxHeight combined with nested overflow containers is a known
+       cause of frozen/stuck scrolling on iOS Safari/Chrome. */
+    <div id="cal-scroll-body-mobile" ref={scrollRef} onScroll={onScroll}
+      style={{overflowY:"auto",flex:1,minHeight:0}}>
       {vertDays.map((ds,i)=>{
         const d=new Date(ds+"T00:00:00");
         const isToday=ds===today();
