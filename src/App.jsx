@@ -1407,9 +1407,9 @@ function PostModal({ post, defaultDate, defaultClientId, defaultClientName, clie
               </select>
             </MField>
           </div>
-          <MField label="Caption"><SugInput value={form.caption} onChange={v=>upd("caption",v)} suggestions={memory.captions} placeholder="Testo del post..." multiline/></MField>
-          <MField label="Hashtag"><SugInput value={form.hashtags} onChange={v=>upd("hashtags",v)} suggestions={memory.hashtags} placeholder="#hashtag #esempio"/></MField>
-          <MField label="Primo Commento"><SugInput value={form.firstComment} onChange={v=>upd("firstComment",v)} suggestions={memory.firstComments} placeholder="Testo del primo commento..." multiline/></MField>
+          <MField label="Caption"><textarea className="input" value={form.caption} onChange={e=>upd("caption",e.target.value)} placeholder="Testo del post..." style={{minHeight:70,resize:"vertical"}}/></MField>
+          <MField label="Hashtag"><input className="input" value={form.hashtags} onChange={e=>upd("hashtags",e.target.value)} placeholder="#hashtag #esempio"/></MField>
+          <MField label="Primo Commento"><textarea className="input" value={form.firstComment} onChange={e=>upd("firstComment",e.target.value)} placeholder="Testo del primo commento..." style={{minHeight:70,resize:"vertical"}}/></MField>
           <MField label="Note interne"><textarea className="input" value={form.notes} onChange={e=>upd("notes",e.target.value)} placeholder="Note per il team..." style={{ minHeight:52, resize:"vertical" }}/></MField>
           <div style={{ display:"flex", gap:8, justifyContent:"space-between", marginTop:2 }}>
             {post && <button className="btn btn-danger btn-sm" onClick={()=>onDelete(post.id)}><Icon name="trash" size={13}/> Elimina</button>}
