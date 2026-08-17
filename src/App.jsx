@@ -93,97 +93,19 @@ function useLS(key, init) {
 }
 
 /* ─── HASHTAG UTILITIES ──────────────────────────────────────────────────── */
-// Dictionary-based word-splitter for hashtags typed as one run of lowercase
-// letters (e.g. "finestreinlegno" -> "Finestre In Legno"). Best-effort: no
-// splitter can be 100% correct without knowing the author's intent, but a
-// greedy longest-match dictionary covers common Italian words + building/
-// home-renovation vocabulary well. Falls back to leaving the run intact
-// (capitalized as one word) if no split is found.
-const HASHTAG_DICTIONARY = [
-  // building / renovation / windows domain (frequent in this app's usage)
-  "finestre","finestra","porte","porta","infissi","infisso","legno","alluminio",
-  "pvc","vetro","vetri","doppio","triplo","vetrata","vetrate","zanzariere",
-  "zanzariera","tapparelle","tapparella","persiane","persiana","scuri","scuro",
-  "tende","tenda","tendaggi","serramenti","serramento","installazione",
-  "installazioni","posa","posain","opera","ristrutturazione","ristrutturazioni",
-  "casa","case","edilizia","cantiere","cantieri","lavori","preventivo",
-  "preventivi","sicurezza","isolamento","termico","acustico","risparmio",
-  "energetico","detrazione","detrazioni","bonus","ecobonus","superbonus",
-  "sostituzione","misura","sumisura","artigianale","qualita","design",
-  "moderno","moderna","classico","classica","elegante","eleganti",
-  // generic common Italian words that often appear in social hashtags
-  "nuovo","nuova","nuovi","nuove","offerta","offerte","sconto","sconti",
-  "promo","promozione","promozioni","novita","tutti","tutte","ogni","tuo",
-  "tua","tuoi","tue","noi","voi","cliente","clienti","azienda","servizio",
-  "servizi","professionale","professionali","garanzia","italiano","italiana",
-  "made","in","italy","local","locale","vicino","zona","citta","regione",
-  "estate","autunno","inverno","primavera","oggi","domani","weekend",
-  "settimana","mese","anno","foto","video","reel","post","social","instagram",
-  "facebook","tiktok","seguici","segui","like","commenta","condividi",
-];
-// Sort dictionary longest-first for greedy matching
-const HASHTAG_DICT_SORTED = [...HASHTAG_DICTIONARY].sort((a,b)=>b.length-a.length);
-
-function splitHashtagWord(lower) {
-  // Try greedy longest-prefix-match against the dictionary
-  const words = [];
-  let i = 0;
-  let guard = 0;
-  while (i < lower.length && guard < 40) {
-    guard++;
-    let matched = null;
-    for (const w of HASHTAG_DICT_SORTED) {
-      if (lower.startsWith(w, i) && w.length >= 2) { matched = w; break; }
-    }
-    if (matched) { words.push(matched); i += matched.length; }
-    else {
-      // No dictionary match at this position — consume one char as a
-      // fallback "unknown" fragment, merging consecutive unknown chars.
-      if (words.length && words[words.length-1] === "\u0000UNK") {
-        words[words.length-1] = "\u0000UNK" + lower[i];
-      } else {
-        words.push("\u0000UNK" + lower[i]);
-      }
-      i++;
-    }
-  }
-  // Merge unknown-marker fragments into plain strings
-  return words.map(w => w.startsWith("\u0000UNK") ? w.slice(5) : w).filter(Boolean);
-}
-
-// Normalize a raw hashtag body (without '#') into CamelCase, e.g.
-// "finestreinlegno" -> "FinestreInLegno", "Finestre_In_Legno" -> "FinestreInLegno"
-function normalizeHashtagBody(raw) {
-  if (!raw) return "";
-  // If it already contains explicit separators (- _ or existing capitals
-  // marking word boundaries), split on those first.
-  const explicitParts = raw.split(/[-_]+/).filter(Boolean);
-  let parts = [];
-  for (const part of explicitParts) {
-    // Split further on existing internal capital-letter boundaries (camelCase input)
-    const camelSplit = part.replace(/([a-z0-9])([A-Z])/g, "$1\u0001$2").split("\u0001");
-    for (const seg of camelSplit) {
-      const lower = seg.toLowerCase();
-      if (lower.length <= 3) { parts.push(lower); continue; }
-      const dictSplit = splitHashtagWord(lower);
-      parts.push(...dictSplit);
-    }
-  }
-  return parts
-    .filter(Boolean)
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-    .join("");
-}
-
-// Extract raw #hashtag tokens (unmodified) from a text blob
-function extractRawHashtagTokens(text) {
-  if (!text) return [];
-  return text.match(/#[\p{L}0-9_-]+/gu) || [];
-}
-
-// Extract all #hashtags from a text blob, returning normalized (CamelCase) forms
+// Extract #hashtags exactly as typed — no splitting, no re-casing. The
+// person catalogs and capitalizes hashtags themselves; this only reads
+// what's already on the page.
 function extractHashtags(text) {
-  return extractRawHashtagTokens(text).map(m => "#" + normalizeHashtagBody(m.slice(1))).filter(h => h.length > 1);
+  if (!text) return [];
+  const matches = text.match(/#[\p{L}0-9_]+/gu) || [];
+  // De-duplicate case-insensitively but keep the first-seen casing
+  const seen = new Map();
+  for (const m of matches) {
+    const key = m.toLowerCase();
+    if (!seen.has(key)) seen.set(key, m);
+  }
+  return [...seen.values()];
 }
 
 // Given all posts, build a map: clientId -> [{tag, count, lastUsed}] sorted by count desc
@@ -396,36 +318,6 @@ export default function App() {
   async function savePost(p)   { await postsCol.save(p); }
   async function deletePost(id){ await postsCol.remove(id); }
 
-  // FIX/FEATURE: one-time migration — normalize any raw hashtags already
-  // stored in existing posts (caption + hashtags fields) into CamelCase the
-  // moment the app loads, so the new Hashtag section and the per-post
-  // dropdown editor always work against already-normalized text. Runs once
-  // per post that still has un-normalized tags (idempotent: normalizing an
-  // already-CamelCase tag is a no-op), guarded so it doesn't loop.
-  const hashtagMigrationRan = useRef(false);
-  useEffect(() => {
-    if (hashtagMigrationRan.current) return;
-    if (!postsCol.ready || posts.length === 0) return;
-    hashtagMigrationRan.current = true;
-    (async () => {
-      for (const p of posts) {
-        const rawTags = extractRawHashtagTokens((p.caption||"") + " " + (p.hashtags||""));
-        let changed = false;
-        let newCaption = p.caption || "";
-        let newHashtags = p.hashtags || "";
-        for (const raw of rawTags) {
-          const normalized = "#" + normalizeHashtagBody(raw.slice(1));
-          if (normalized !== raw) {
-            const esc = raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-            const re = new RegExp(esc + "(?![\\p{L}0-9_-])", "gu");
-            if (re.test(newCaption))  { newCaption  = newCaption.replace(re, normalized);  changed = true; }
-            if (re.test(newHashtags)) { newHashtags = newHashtags.replace(re, normalized); changed = true; }
-          }
-        }
-        if (changed) await postsCol.save({ ...p, caption:newCaption, hashtags:newHashtags });
-      }
-    })();
-  }, [postsCol.ready, posts]);
 
   const fontObj     = FONT_OPTIONS.find(f => f.id === fontId) || FONT_OPTIONS[0];
   const fontSizeObj = FONT_SIZES.find(f => f.id === fontSizeId) || FONT_SIZES[2];
@@ -1551,6 +1443,7 @@ function HashtagCellsEditor({ slots, onChange, clientId, posts }) {
           return (
             <div key={i} style={{ position:"relative" }}>
               <div onClick={e=>{ e.stopPropagation(); setOpenCell(isOpen?null:i); }}
+                title={slotTag||""}
                 style={{ display:"flex", alignItems:"center", gap:4, padding:"7px 8px", borderRadius:"var(--radius2)",
                   border:"1.5px solid var(--border)", background:slotTag?"var(--accentbg)":"var(--surface2)",
                   cursor:"pointer", minHeight:34, transition:"var(--transition)" }}>
@@ -1568,12 +1461,13 @@ function HashtagCellsEditor({ slots, onChange, clientId, posts }) {
               </div>
               {isOpen && (
                 <div onClick={e=>e.stopPropagation()}
-                  style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:500, marginTop:4,
+                  style={{ position:"absolute", top:"100%", left:0, zIndex:500, marginTop:4,
+                    minWidth:"max(100%, 220px)", width:"max-content", maxWidth:320,
                     background:"var(--surface)", border:"1.5px solid var(--border)", borderRadius:10,
-                    boxShadow:"var(--shadow2)", maxHeight:220, overflowY:"auto", animation:"fadeIn .1s ease" }}>
+                    boxShadow:"var(--shadow2)", maxHeight:260, overflowY:"auto", animation:"fadeIn .1s ease" }}>
                   {slotTag && (
                     <div onClick={()=>{ onChange(i,null); setOpenCell(null); }}
-                      style={{ padding:"7px 12px", fontSize:"var(--fs-xs)", color:"var(--danger)", cursor:"pointer",
+                      style={{ padding:"8px 12px", fontSize:"var(--fs-xs)", color:"var(--danger)", cursor:"pointer",
                         borderBottom:"1px solid var(--border)", fontWeight:600 }}
                       onMouseEnter={e=>e.currentTarget.style.background="var(--dangerbg)"}
                       onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
@@ -1584,12 +1478,12 @@ function HashtagCellsEditor({ slots, onChange, clientId, posts }) {
                     <div style={{ padding:"10px 12px", fontSize:"var(--fs-xs)", color:"var(--text3)" }}>Nessun hashtag disponibile</div>
                   ) : options.map(t => (
                     <div key={t.tag} onClick={()=>{ onChange(i, t.tag); setOpenCell(null); }}
-                      style={{ padding:"7px 12px", display:"flex", alignItems:"center", justifyContent:"space-between",
-                        gap:8, fontSize:"var(--fs-xs)", cursor:"pointer",
+                      style={{ padding:"8px 12px", display:"flex", alignItems:"center", justifyContent:"space-between",
+                        gap:10, fontSize:"var(--fs-xs)", cursor:"pointer",
                         background:t.tag===slotTag?"var(--surface2)":"transparent" }}
                       onMouseEnter={e=>e.currentTarget.style.background="var(--surface2)"}
                       onMouseLeave={e=>e.currentTarget.style.background=t.tag===slotTag?"var(--surface2)":"transparent"}>
-                      <span style={{ fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{t.tag}</span>
+                      <span style={{ fontWeight:500, whiteSpace:"normal", wordBreak:"break-word", flex:1 }}>{t.tag}</span>
                       <span style={{ color:"var(--text3)", flexShrink:0 }}>{t.count}×</span>
                     </div>
                   ))}
