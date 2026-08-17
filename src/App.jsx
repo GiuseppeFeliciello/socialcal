@@ -108,11 +108,20 @@ function extractHashtags(text) {
   return [...seen.values()];
 }
 
-// Given all posts, build a map: clientId -> [{tag, count, lastUsed}] sorted by count desc
+// The date the "clean" hashtag catalog starts from. Older posts may still
+// contain hashtags mangled by an earlier, since-removed auto-splitting
+// migration; those are excluded from the catalog/dropdowns going forward
+// rather than trying to guess/repair them. Set once, at the point this fix
+// shipped, so counting is stable across reloads.
+const HASHTAG_CATALOG_START_DATE = "2026-08-17";
+
+// Given all posts, build a map: clientId -> [{tag, count, lastUsed}] sorted by count desc.
+// Only counts posts on/after HASHTAG_CATALOG_START_DATE.
 function buildHashtagIndex(posts) {
   const byClient = {};
   for (const p of posts) {
     if (!p.clientId) continue;
+    if (!p.date || p.date < HASHTAG_CATALOG_START_DATE) continue;
     const tags = new Set([
       ...extractHashtags(p.caption || ""),
       ...extractHashtags(p.hashtags || ""),
@@ -130,6 +139,15 @@ function buildHashtagIndex(posts) {
     result[clientId] = Object.values(byClient[clientId]);
   }
   return result;
+}
+
+// Remove a hashtag (case-insensitive, whole-token match) from a post's
+// caption and hashtags fields, cleaning up extra whitespace left behind.
+function removeHashtagFromText(text, tag) {
+  if (!text) return text;
+  const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(escaped + "(?![\\p{L}0-9_])", "giu");
+  return text.replace(re, "").replace(/[ \t]{2,}/g, " ").replace(/\s+$/gm, "").trim();
 }
 
 /* ─── GLOBAL CSS ─────────────────────────────────────────────────────────── */
@@ -406,7 +424,7 @@ export default function App() {
         {section==="clients"   && <ClientsSection clients={clients}
           onSaveClient={saveClient} onDeleteClient={deleteClient} posts={posts} lbl={lbl} />}
         {section==="finance"   && <FinanceSection clients={clients} finance={finance} saveFinanceDoc={saveFinanceDoc} deleteFinanceDoc={deleteFinanceDoc} finMemDoc={finMemDoc} addFinMemory={addFinMemory} lbl={lbl}/>}
-        {section==="hashtags"  && <HashtagSection posts={posts} clients={clients} lbl={lbl}/>}
+        {section==="hashtags"  && <HashtagSection posts={posts} clients={clients} onSavePost={savePost} lbl={lbl}/>}
         {section==="settings"  && isAdmin && (
           <Settings users={users} onSaveUser={saveUser} onDeleteUser={deleteUser}
             lbl={lbl} setLbl={setLbl} currentUser={currentUser}
@@ -1650,10 +1668,12 @@ function PostsSection({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
 
 /* ─── CLIENTS ────────────────────────────────────────────────────────────── */
 /* ─── HASHTAG SECTION ────────────────────────────────────────────────────── */
-function HashtagSection({ posts, clients, lbl }) {
+function HashtagSection({ posts, clients, onSavePost, lbl }) {
   const [selectedClient, setSelectedClient] = useState("");
   const [sortBy, setSortBy] = useState("count"); // "count" | "alpha" | "recent"
   const [copiedTag, setCopiedTag] = useState("");
+  const [deleting, setDeleting] = useState(null); // tag pending confirmation
+  const [busy, setBusy] = useState(false);
 
   const hashtagIndex = buildHashtagIndex(posts);
   const clientsWithTags = clients.filter(c => (hashtagIndex[c.id]||[]).length > 0);
@@ -1673,6 +1693,29 @@ function HashtagSection({ posts, clients, lbl }) {
   async function copyAll() {
     const text = tags.map(t=>t.tag).join(" ");
     try { await navigator.clipboard.writeText(text); setCopiedTag("__all__"); setTimeout(()=>setCopiedTag(""), 1500); } catch {}
+  }
+
+  // Deleting a tag removes it from the catalog AND strips it out of every
+  // post's caption/hashtags text (for this client) — per the person's
+  // explicit choice, so it can't resurface via those fields either.
+  async function confirmDelete(tag) {
+    setBusy(true);
+    try {
+      const affected = posts.filter(p =>
+        p.clientId === activeClientId &&
+        (extractHashtags(p.caption||"").includes(tag) || extractHashtags(p.hashtags||"").includes(tag))
+      );
+      for (const p of affected) {
+        await onSavePost({
+          ...p,
+          caption: removeHashtagFromText(p.caption||"", tag),
+          hashtags: removeHashtagFromText(p.hashtags||"", tag),
+        });
+      }
+    } finally {
+      setBusy(false);
+      setDeleting(null);
+    }
   }
 
   return (
@@ -1715,11 +1758,35 @@ function HashtagSection({ posts, clients, lbl }) {
                   <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>copyTag(t.tag)}>
                     {copiedTag===t.tag ? <Icon name="check" size={12} color="var(--accent)"/> : <Icon name="fileText" size={12}/>}
                   </button>
+                  <button className="btn btn-danger btn-icon btn-sm" onClick={()=>setDeleting(t.tag)}>
+                    <Icon name="trash" size={12}/>
+                  </button>
                 </div>
               ))}
             </div>
           </div>
         </>
+      )}
+
+      {deleting && (
+        <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&!busy&&setDeleting(null)}>
+          <div className="modal" style={{ maxWidth:420 }}>
+            <div style={{ padding:"16px 20px", borderBottom:"1.5px solid var(--border)" }}>
+              <div style={{ fontWeight:700, fontSize:"var(--fs)" }}>Eliminare {deleting}?</div>
+            </div>
+            <div style={{ padding:20, display:"flex", flexDirection:"column", gap:14 }}>
+              <p style={{ fontSize:"var(--fs-sm)", color:"var(--text2)" }}>
+                Verrà rimosso dal catalogo e dai menù a tendina, e cancellato dal testo di caption e hashtag in tutti i post di <strong>{activeClient?.name}</strong> che lo contengono.
+              </p>
+              <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+                <button className="btn btn-ghost" onClick={()=>setDeleting(null)} disabled={busy}>Annulla</button>
+                <button className="btn btn-danger" onClick={()=>confirmDelete(deleting)} disabled={busy}>
+                  <Icon name="trash" size={13}/> {busy?"Eliminazione...":"Elimina"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
