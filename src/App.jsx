@@ -92,6 +92,124 @@ function useLS(key, init) {
   return [v, setV];
 }
 
+/* ─── HASHTAG UTILITIES ──────────────────────────────────────────────────── */
+// Dictionary-based word-splitter for hashtags typed as one run of lowercase
+// letters (e.g. "finestreinlegno" -> "Finestre In Legno"). Best-effort: no
+// splitter can be 100% correct without knowing the author's intent, but a
+// greedy longest-match dictionary covers common Italian words + building/
+// home-renovation vocabulary well. Falls back to leaving the run intact
+// (capitalized as one word) if no split is found.
+const HASHTAG_DICTIONARY = [
+  // building / renovation / windows domain (frequent in this app's usage)
+  "finestre","finestra","porte","porta","infissi","infisso","legno","alluminio",
+  "pvc","vetro","vetri","doppio","triplo","vetrata","vetrate","zanzariere",
+  "zanzariera","tapparelle","tapparella","persiane","persiana","scuri","scuro",
+  "tende","tenda","tendaggi","serramenti","serramento","installazione",
+  "installazioni","posa","posain","opera","ristrutturazione","ristrutturazioni",
+  "casa","case","edilizia","cantiere","cantieri","lavori","preventivo",
+  "preventivi","sicurezza","isolamento","termico","acustico","risparmio",
+  "energetico","detrazione","detrazioni","bonus","ecobonus","superbonus",
+  "sostituzione","misura","sumisura","artigianale","qualita","design",
+  "moderno","moderna","classico","classica","elegante","eleganti",
+  // generic common Italian words that often appear in social hashtags
+  "nuovo","nuova","nuovi","nuove","offerta","offerte","sconto","sconti",
+  "promo","promozione","promozioni","novita","tutti","tutte","ogni","tuo",
+  "tua","tuoi","tue","noi","voi","cliente","clienti","azienda","servizio",
+  "servizi","professionale","professionali","garanzia","italiano","italiana",
+  "made","in","italy","local","locale","vicino","zona","citta","regione",
+  "estate","autunno","inverno","primavera","oggi","domani","weekend",
+  "settimana","mese","anno","foto","video","reel","post","social","instagram",
+  "facebook","tiktok","seguici","segui","like","commenta","condividi",
+];
+// Sort dictionary longest-first for greedy matching
+const HASHTAG_DICT_SORTED = [...HASHTAG_DICTIONARY].sort((a,b)=>b.length-a.length);
+
+function splitHashtagWord(lower) {
+  // Try greedy longest-prefix-match against the dictionary
+  const words = [];
+  let i = 0;
+  let guard = 0;
+  while (i < lower.length && guard < 40) {
+    guard++;
+    let matched = null;
+    for (const w of HASHTAG_DICT_SORTED) {
+      if (lower.startsWith(w, i) && w.length >= 2) { matched = w; break; }
+    }
+    if (matched) { words.push(matched); i += matched.length; }
+    else {
+      // No dictionary match at this position — consume one char as a
+      // fallback "unknown" fragment, merging consecutive unknown chars.
+      if (words.length && words[words.length-1] === "\u0000UNK") {
+        words[words.length-1] = "\u0000UNK" + lower[i];
+      } else {
+        words.push("\u0000UNK" + lower[i]);
+      }
+      i++;
+    }
+  }
+  // Merge unknown-marker fragments into plain strings
+  return words.map(w => w.startsWith("\u0000UNK") ? w.slice(5) : w).filter(Boolean);
+}
+
+// Normalize a raw hashtag body (without '#') into CamelCase, e.g.
+// "finestreinlegno" -> "FinestreInLegno", "Finestre_In_Legno" -> "FinestreInLegno"
+function normalizeHashtagBody(raw) {
+  if (!raw) return "";
+  // If it already contains explicit separators (- _ or existing capitals
+  // marking word boundaries), split on those first.
+  const explicitParts = raw.split(/[-_]+/).filter(Boolean);
+  let parts = [];
+  for (const part of explicitParts) {
+    // Split further on existing internal capital-letter boundaries (camelCase input)
+    const camelSplit = part.replace(/([a-z0-9])([A-Z])/g, "$1\u0001$2").split("\u0001");
+    for (const seg of camelSplit) {
+      const lower = seg.toLowerCase();
+      if (lower.length <= 3) { parts.push(lower); continue; }
+      const dictSplit = splitHashtagWord(lower);
+      parts.push(...dictSplit);
+    }
+  }
+  return parts
+    .filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join("");
+}
+
+// Extract raw #hashtag tokens (unmodified) from a text blob
+function extractRawHashtagTokens(text) {
+  if (!text) return [];
+  return text.match(/#[\p{L}0-9_-]+/gu) || [];
+}
+
+// Extract all #hashtags from a text blob, returning normalized (CamelCase) forms
+function extractHashtags(text) {
+  return extractRawHashtagTokens(text).map(m => "#" + normalizeHashtagBody(m.slice(1))).filter(h => h.length > 1);
+}
+
+// Given all posts, build a map: clientId -> [{tag, count, lastUsed}] sorted by count desc
+function buildHashtagIndex(posts) {
+  const byClient = {};
+  for (const p of posts) {
+    if (!p.clientId) continue;
+    const tags = new Set([
+      ...extractHashtags(p.caption || ""),
+      ...extractHashtags(p.hashtags || ""),
+    ]);
+    if (tags.size === 0) continue;
+    if (!byClient[p.clientId]) byClient[p.clientId] = {};
+    for (const tag of tags) {
+      if (!byClient[p.clientId][tag]) byClient[p.clientId][tag] = { tag, count: 0, lastUsed: p.date || "" };
+      byClient[p.clientId][tag].count += 1;
+      if ((p.date || "") > byClient[p.clientId][tag].lastUsed) byClient[p.clientId][tag].lastUsed = p.date || "";
+    }
+  }
+  const result = {};
+  for (const clientId in byClient) {
+    result[clientId] = Object.values(byClient[clientId]);
+  }
+  return result;
+}
+
 /* ─── GLOBAL CSS ─────────────────────────────────────────────────────────── */
 function buildCSS(fontFamily, fontSize) {
   return `
@@ -278,6 +396,37 @@ export default function App() {
   async function savePost(p)   { await postsCol.save(p); }
   async function deletePost(id){ await postsCol.remove(id); }
 
+  // FIX/FEATURE: one-time migration — normalize any raw hashtags already
+  // stored in existing posts (caption + hashtags fields) into CamelCase the
+  // moment the app loads, so the new Hashtag section and the per-post
+  // dropdown editor always work against already-normalized text. Runs once
+  // per post that still has un-normalized tags (idempotent: normalizing an
+  // already-CamelCase tag is a no-op), guarded so it doesn't loop.
+  const hashtagMigrationRan = useRef(false);
+  useEffect(() => {
+    if (hashtagMigrationRan.current) return;
+    if (!postsCol.ready || posts.length === 0) return;
+    hashtagMigrationRan.current = true;
+    (async () => {
+      for (const p of posts) {
+        const rawTags = extractRawHashtagTokens((p.caption||"") + " " + (p.hashtags||""));
+        let changed = false;
+        let newCaption = p.caption || "";
+        let newHashtags = p.hashtags || "";
+        for (const raw of rawTags) {
+          const normalized = "#" + normalizeHashtagBody(raw.slice(1));
+          if (normalized !== raw) {
+            const esc = raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const re = new RegExp(esc + "(?![\\p{L}0-9_-])", "gu");
+            if (re.test(newCaption))  { newCaption  = newCaption.replace(re, normalized);  changed = true; }
+            if (re.test(newHashtags)) { newHashtags = newHashtags.replace(re, normalized); changed = true; }
+          }
+        }
+        if (changed) await postsCol.save({ ...p, caption:newCaption, hashtags:newHashtags });
+      }
+    })();
+  }, [postsCol.ready, posts]);
+
   const fontObj     = FONT_OPTIONS.find(f => f.id === fontId) || FONT_OPTIONS[0];
   const fontSizeObj = FONT_SIZES.find(f => f.id === fontSizeId) || FONT_SIZES[2];
 
@@ -315,6 +464,7 @@ export default function App() {
     { id: "posts",     icon: "pen",      label: lbl("nav_posts",     "Post") },
     { id: "clients",   icon: "users",    label: lbl("nav_clients",   "Clienti") },
     { id: "finance",   icon: "euro",     label: lbl("nav_finance",   "Gestionale") },
+    { id: "hashtags",  icon: "hash",     label: lbl("nav_hashtags",  "Hashtag") },
     ...(isAdmin ? [{ id: "settings", icon: "settings", label: lbl("nav_settings", "Impostazioni") }] : []),
   ];
 
@@ -364,6 +514,7 @@ export default function App() {
         {section==="clients"   && <ClientsSection clients={clients}
           onSaveClient={saveClient} onDeleteClient={deleteClient} posts={posts} lbl={lbl} />}
         {section==="finance"   && <FinanceSection clients={clients} finance={finance} saveFinanceDoc={saveFinanceDoc} deleteFinanceDoc={deleteFinanceDoc} finMemDoc={finMemDoc} addFinMemory={addFinMemory} lbl={lbl}/>}
+        {section==="hashtags"  && <HashtagSection posts={posts} clients={clients} lbl={lbl}/>}
         {section==="settings"  && isAdmin && (
           <Settings users={users} onSaveUser={saveUser} onDeleteUser={deleteUser}
             lbl={lbl} setLbl={setLbl} currentUser={currentUser}
@@ -627,11 +778,21 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
     container.scrollTop += targetRect.top - containerRect.top - container.clientHeight / 3;
   }
 
+  // FIX: desktop wasn't reliably landing on "today" on mount even though the
+  // button worked — a single rAF pass could fire before layout had fully
+  // settled (fonts loading, CSS injected async via buildCSS's <style> tag,
+  // grid columns recalculating from useWindowWidth). Fire the scroll attempt
+  // at multiple delays to catch it after layout stabilizes, using the same
+  // rAF-retry helper each time so it's a no-op once already scrolled.
   useEffect(() => {
-    requestAnimationFrame(() => {
+    const scrollBoth = () => {
       scrollToTodayIn(desktopScrollRef.current);
       scrollToTodayIn(mobileScrollRef.current);
-    });
+    };
+    requestAnimationFrame(scrollBoth);
+    const t1 = setTimeout(scrollBoth, 150);
+    const t2 = setTimeout(scrollBoth, 500);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);
 
   useEffect(() => {
@@ -1148,7 +1309,7 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
       )}
 
       {(editPost||newPostData)&&(
-        <PostModal post={editPost} defaultDate={newPostData?.date} defaultClientId={newPostData?.clientId} defaultClientName={newPostData?.clientName} clients={clients} memory={memory} addMemory={addMemory}
+        <PostModal post={editPost} defaultDate={newPostData?.date} defaultClientId={newPostData?.clientId} defaultClientName={newPostData?.clientName} clients={clients} posts={posts} memory={memory} addMemory={addMemory}
           onSave={async p=>{if(!p.id)p={...p,id:genId()};await onSavePost(p);setEditPost(null);setNewPostData(null);}}
           onDelete={async id=>{await onDeletePost(id);setEditPost(null);}}
           onClose={()=>{setEditPost(null);setNewPostData(null);}}/>
@@ -1357,24 +1518,128 @@ function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBo
 }
 
 
-function PostModal({ post, defaultDate, defaultClientId, defaultClientName, clients, memory, addMemory, onSave, onDelete, onClose }) {
+/* ─── HASHTAG CELLS EDITOR (5 slots, per-post) ──────────────────────────── */
+function HashtagCellsEditor({ slots, onChange, clientId, posts }) {
+  const [openCell, setOpenCell] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  const hashtagIndex = buildHashtagIndex(posts || []);
+  const allForClient = (hashtagIndex[clientId] || []).slice().sort((a,b)=>b.count-a.count);
+  const chosen = new Set(slots.filter(Boolean));
+
+  useEffect(() => {
+    if (openCell === null) return;
+    function close() { setOpenCell(null); }
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [openCell]);
+
+  async function copyAll() {
+    const text = slots.filter(Boolean).join(" ");
+    if (!text) return;
+    try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(()=>setCopied(false), 1500); } catch {}
+  }
+
+  return (
+    <div className="field">
+      <label className="label">Hashtag (fino a 5)</label>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:6 }}>
+        {slots.map((slotTag, i) => {
+          const isOpen = openCell === i;
+          // Options for this cell: all client hashtags not chosen in OTHER cells
+          const options = allForClient.filter(t => t.tag === slotTag || !chosen.has(t.tag));
+          return (
+            <div key={i} style={{ position:"relative" }}>
+              <div onClick={e=>{ e.stopPropagation(); setOpenCell(isOpen?null:i); }}
+                style={{ display:"flex", alignItems:"center", gap:4, padding:"7px 8px", borderRadius:"var(--radius2)",
+                  border:"1.5px solid var(--border)", background:slotTag?"var(--accentbg)":"var(--surface2)",
+                  cursor:"pointer", minHeight:34, transition:"var(--transition)" }}>
+                <span style={{ flex:1, fontSize:"var(--fs-xs)", fontWeight:slotTag?600:400,
+                  color:slotTag?"var(--accent)":"var(--text3)", overflow:"hidden", textOverflow:"ellipsis",
+                  whiteSpace:"nowrap" }}>
+                  {slotTag || `#${i+1}`}
+                </span>
+                {slotTag && (
+                  <span onClick={e=>{ e.stopPropagation(); onChange(i,null); setOpenCell(null); }}
+                    style={{ display:"flex", flexShrink:0, cursor:"pointer", opacity:.6 }}>
+                    <Icon name="x" size={10} color="var(--accent)"/>
+                  </span>
+                )}
+              </div>
+              {isOpen && (
+                <div onClick={e=>e.stopPropagation()}
+                  style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:500, marginTop:4,
+                    background:"var(--surface)", border:"1.5px solid var(--border)", borderRadius:10,
+                    boxShadow:"var(--shadow2)", maxHeight:220, overflowY:"auto", animation:"fadeIn .1s ease" }}>
+                  {slotTag && (
+                    <div onClick={()=>{ onChange(i,null); setOpenCell(null); }}
+                      style={{ padding:"7px 12px", fontSize:"var(--fs-xs)", color:"var(--danger)", cursor:"pointer",
+                        borderBottom:"1px solid var(--border)", fontWeight:600 }}
+                      onMouseEnter={e=>e.currentTarget.style.background="var(--dangerbg)"}
+                      onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                      ✕ Rimuovi
+                    </div>
+                  )}
+                  {options.length === 0 ? (
+                    <div style={{ padding:"10px 12px", fontSize:"var(--fs-xs)", color:"var(--text3)" }}>Nessun hashtag disponibile</div>
+                  ) : options.map(t => (
+                    <div key={t.tag} onClick={()=>{ onChange(i, t.tag); setOpenCell(null); }}
+                      style={{ padding:"7px 12px", display:"flex", alignItems:"center", justifyContent:"space-between",
+                        gap:8, fontSize:"var(--fs-xs)", cursor:"pointer",
+                        background:t.tag===slotTag?"var(--surface2)":"transparent" }}
+                      onMouseEnter={e=>e.currentTarget.style.background="var(--surface2)"}
+                      onMouseLeave={e=>e.currentTarget.style.background=t.tag===slotTag?"var(--surface2)":"transparent"}>
+                      <span style={{ fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{t.tag}</span>
+                      <span style={{ color:"var(--text3)", flexShrink:0 }}>{t.count}×</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display:"flex", justifyContent:"flex-end", marginTop:6 }}>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={copyAll} style={{ display:"flex", alignItems:"center", gap:5 }}>
+          <Icon name={copied?"check":"fileText"} size={12} color={copied?"var(--accent)":undefined}/> {copied?"Copiato!":"Copia hashtag"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PostModal({ post, defaultDate, defaultClientId, defaultClientName, clients, posts, memory, addMemory, onSave, onDelete, onClose }) {
   const defaultClient = clients.find(c=>c.id===defaultClientId);
   const defaultPlatform = defaultClient?.platform?.toLowerCase().includes("tik") && defaultClient?.platform?.toLowerCase().includes("insta") && defaultClient?.platform?.toLowerCase().includes("face")
     ? "Tutte"
     : "Tutte";
-  const [form, setForm] = useState(post || {
-    title:"", clientId:defaultClientId||"", clientName:defaultClientName||"",
-    platform:"Tutte", date:defaultDate||today(), status:"Da Editare",
-    caption:"", hashtags:"", firstComment:"", notes:"",
-    igStatus:"—", fbStatus:"—", ttStatus:"—"
+  // Parse an existing hashtags string into up to 5 slots for the cell editor.
+  // New posts start with 5 empty slots.
+  function parseHashtagsToSlots(str) {
+    const tags = extractHashtags(str || "");
+    const slots = [null,null,null,null,null];
+    for (let i=0;i<Math.min(5,tags.length);i++) slots[i] = tags[i];
+    return slots;
+  }
+  const [form, setForm] = useState(() => {
+    const base = post || {
+      title:"", clientId:defaultClientId||"", clientName:defaultClientName||"",
+      platform:"Tutte", date:defaultDate||today(), status:"Da Editare",
+      caption:"", hashtags:"", firstComment:"", notes:"",
+      igStatus:"—", fbStatus:"—", ttStatus:"—"
+    };
+    return { ...base, hashtagSlots: parseHashtagsToSlots(base.hashtags) };
   });
   function upd(k,v) { setForm(f=>({...f,[k]:v})); }
+  function updSlot(i,tag) { setForm(f=>{ const s=[...f.hashtagSlots]; s[i]=tag; return {...f, hashtagSlots:s}; }); }
   async function save() {
     const cl = clients.find(c=>c.id===form.clientId);
-    if (form.caption)      addMemory("captions",      form.caption);
-    if (form.hashtags)     addMemory("hashtags",      form.hashtags);
+    const hashtagsStr = form.hashtagSlots.filter(Boolean).join(" ");
+    if (form.caption)  addMemory("captions", form.caption);
+    if (hashtagsStr)   addMemory("hashtags", hashtagsStr);
     if (form.firstComment) addMemory("firstComments", form.firstComment);
-    await onSave({...form, clientName:cl?.name||form.clientName});
+    const { hashtagSlots, ...rest } = form;
+    await onSave({...rest, hashtags:hashtagsStr, clientName:cl?.name||form.clientName});
   }
   const sc = STATUS_COLORS[form.status] || STATUS_COLORS["Da Editare"];
   return (
@@ -1408,7 +1673,7 @@ function PostModal({ post, defaultDate, defaultClientId, defaultClientName, clie
             </MField>
           </div>
           <MField label="Caption"><textarea className="input" value={form.caption} onChange={e=>upd("caption",e.target.value)} placeholder="Testo del post..." style={{minHeight:70,resize:"vertical"}}/></MField>
-          <MField label="Hashtag"><input className="input" value={form.hashtags} onChange={e=>upd("hashtags",e.target.value)} placeholder="#hashtag #esempio"/></MField>
+          <HashtagCellsEditor slots={form.hashtagSlots} onChange={updSlot} clientId={form.clientId} posts={posts}/>
           <MField label="Primo Commento"><textarea className="input" value={form.firstComment} onChange={e=>upd("firstComment",e.target.value)} placeholder="Testo del primo commento..." style={{minHeight:70,resize:"vertical"}}/></MField>
           <MField label="Note interne"><textarea className="input" value={form.notes} onChange={e=>upd("notes",e.target.value)} placeholder="Note per il team..." style={{ minHeight:52, resize:"vertical" }}/></MField>
           <div style={{ display:"flex", gap:8, justifyContent:"space-between", marginTop:2 }}>
@@ -1480,7 +1745,7 @@ function PostsSection({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
             })}
           </div>}
       {(editPost||newPost) && (
-        <PostModal post={editPost||undefined} defaultDate={today()} clients={clients} memory={memory} addMemory={addMemory}
+        <PostModal post={editPost||undefined} defaultDate={today()} clients={clients} posts={posts} memory={memory} addMemory={addMemory}
           onSave={async p=>{if(!p.id)p={...p,id:genId()};await onSavePost(p);setEditPost(null);setNewPost(false);}}
           onDelete={async id=>{await onDeletePost(id);setEditPost(null);}}
           onClose={()=>{setEditPost(null);setNewPost(false);}}/>
@@ -1490,6 +1755,82 @@ function PostsSection({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
 }
 
 /* ─── CLIENTS ────────────────────────────────────────────────────────────── */
+/* ─── HASHTAG SECTION ────────────────────────────────────────────────────── */
+function HashtagSection({ posts, clients, lbl }) {
+  const [selectedClient, setSelectedClient] = useState("");
+  const [sortBy, setSortBy] = useState("count"); // "count" | "alpha" | "recent"
+  const [copiedTag, setCopiedTag] = useState("");
+
+  const hashtagIndex = buildHashtagIndex(posts);
+  const clientsWithTags = clients.filter(c => (hashtagIndex[c.id]||[]).length > 0);
+  const activeClientId = selectedClient || clientsWithTags[0]?.id || "";
+  const activeClient = clients.find(c => c.id === activeClientId);
+  let tags = hashtagIndex[activeClientId] || [];
+
+  tags = [...tags].sort((a,b) => {
+    if (sortBy === "alpha")   return a.tag.localeCompare(b.tag);
+    if (sortBy === "recent")  return (b.lastUsed||"").localeCompare(a.lastUsed||"");
+    return b.count - a.count; // default: most used first
+  });
+
+  async function copyTag(tag) {
+    try { await navigator.clipboard.writeText(tag); setCopiedTag(tag); setTimeout(()=>setCopiedTag(""), 1500); } catch {}
+  }
+  async function copyAll() {
+    const text = tags.map(t=>t.tag).join(" ");
+    try { await navigator.clipboard.writeText(text); setCopiedTag("__all__"); setTimeout(()=>setCopiedTag(""), 1500); } catch {}
+  }
+
+  return (
+    <div style={{ padding:"clamp(14px,4vw,32px)" }}>
+      <div className="section-header">
+        <h1 className="page-title">{lbl("hashtags_title","Hashtag")}</h1>
+      </div>
+
+      {clientsWithTags.length===0 ? (
+        <div className="empty-state card" style={{padding:48}}><Icon name="hash" size={36}/><p>Nessun hashtag ancora — inizia a scriverli nei post</p></div>
+      ) : (
+        <>
+          <div style={{ display:"flex", gap:10, marginBottom:18, flexWrap:"wrap", alignItems:"center" }}>
+            <select className="input" value={activeClientId} onChange={e=>setSelectedClient(e.target.value)} style={{ maxWidth:220 }}>
+              {clientsWithTags.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <div className="pill-tabs">
+              <button className={"pill-tab"+(sortBy==="count"?" active":"")} onClick={()=>setSortBy("count")}>Più usati</button>
+              <button className={"pill-tab"+(sortBy==="alpha"?" active":"")} onClick={()=>setSortBy("alpha")}>Alfabetico</button>
+              <button className={"pill-tab"+(sortBy==="recent"?" active":"")} onClick={()=>setSortBy("recent")}>Più recenti</button>
+            </div>
+            <div style={{ marginLeft:"auto", fontSize:"var(--fs-xs)", color:"var(--text3)" }}>{tags.length} hashtag</div>
+          </div>
+
+          <div className="card" style={{ padding:0, overflow:"hidden" }}>
+            <div style={{ padding:"11px 16px", background:"var(--surface2)", borderBottom:"1.5px solid var(--border)", display:"flex", alignItems:"center", gap:10 }}>
+              <div style={{ width:8, height:8, borderRadius:"50%", background:activeClient?.color||"#94a3b8" }}/>
+              <span style={{ fontWeight:600, fontSize:"var(--fs)" }}>{activeClient?.name}</span>
+              <button className="btn btn-ghost btn-sm" style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:5 }} onClick={copyAll}>
+                <Icon name="fileText" size={12}/> {copiedTag==="__all__"?"Copiato!":"Copia tutti"}
+              </button>
+            </div>
+            <div style={{ display:"flex", flexDirection:"column" }}>
+              {tags.map((t,i) => (
+                <div key={t.tag} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 16px", borderBottom:i<tags.length-1?"1px solid var(--border)":"none" }}>
+                  <span style={{ fontSize:"var(--fs-xs)", color:"var(--text3)", width:24, flexShrink:0 }}>{i+1}</span>
+                  <span style={{ fontWeight:600, fontSize:"var(--fs-sm)", color:activeClient?.color||"var(--text)", flex:1 }}>{t.tag}</span>
+                  <span className="chip" style={{ background:"var(--surface2)", color:"var(--text2)", borderColor:"var(--border)" }}>{t.count}×</span>
+                  <span style={{ fontSize:"var(--fs-xs)", color:"var(--text3)", width:76, textAlign:"right", flexShrink:0 }}>{t.lastUsed?fmtDate(t.lastUsed):"—"}</span>
+                  <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>copyTag(t.tag)}>
+                    {copiedTag===t.tag ? <Icon name="check" size={12} color="var(--accent)"/> : <Icon name="fileText" size={12}/>}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ClientsSection({ clients, onSaveClient, onDeleteClient, posts, lbl }) {
   const [editing,   setEditing]   = useState(null);
   const [newClient, setNewClient] = useState(false);
