@@ -70,8 +70,9 @@ const FONT_SIZES = [
 
 /* ─── CONSTANTS ──────────────────────────────────────────────────────────── */
 const PLATFORMS = ["Instagram", "Facebook", "TikTok", "Tutte"];
-const POST_STATUSES = ["Da Editare", "Pronto", "Programmato", "Pubblicato"];
+const POST_STATUSES = ["Da Girare", "Da Editare", "Pronto", "Programmato", "Pubblicato"];
 const STATUS_COLORS = {
+  "Da Girare":   { bg: "#f59e0b", light: "#fffbeb", text: "#92400e" },
   "Da Editare":  { bg: "#ef4444", light: "#fef2f2", text: "#991b1b" },
   "Pronto":      { bg: "#22c55e", light: "#f0fdf4", text: "#166534" },
   "Programmato": { bg: "#6366f1", light: "#eef2ff", text: "#3730a3" },
@@ -769,6 +770,7 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
     const active=[post.igStatus,post.fbStatus,post.ttStatus].filter(s=>s&&s!=="—");
     if (active.length>0 && active.every(s=>s==="Pubblicato")) return STATUS_COLORS["Pubblicato"].bg;
     if (active.some(s=>s==="Programmato")) return STATUS_COLORS["Programmato"].bg;
+    if (post.status==="Da Girare")  return STATUS_COLORS["Da Girare"].bg;
     if (post.status==="Da Editare") return STATUS_COLORS["Da Editare"].bg;
     return STATUS_COLORS["Pronto"].bg;
   }
@@ -928,7 +930,7 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
       </div>
     );
   }
-  const STATO_COLORS = { "Da Editare":STATUS_COLORS["Da Editare"], "Pronto":STATUS_COLORS["Pronto"] };
+  const STATO_COLORS = { "Da Girare":STATUS_COLORS["Da Girare"], "Da Editare":STATUS_COLORS["Da Editare"], "Pronto":STATUS_COLORS["Pronto"] };
   const SOCIAL_COLORS = { "—":null, "Programmato":STATUS_COLORS["Programmato"], "Pubblicato":STATUS_COLORS["Pubblicato"] };
   // Dynamic grid columns based on window width
   const showSocial = winW >= 1100;
@@ -1037,7 +1039,7 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
               {/* Stato principale */}
               <div style={{borderRight:"1px solid var(--border)",padding:"0 5px",display:"flex",alignItems:"center",justifyContent:"center",overflow:"visible",minWidth:0}}>
                 <PillDropdown postId={p.id} field="status" value={p.status||"Da Editare"}
-                  options={["Da Editare","Pronto"]} colorMap={STATO_COLORS}/>
+                  options={["Da Girare","Da Editare","Pronto"]} colorMap={STATO_COLORS}/>
               </div>
 
               {/* Instagram */}
@@ -2243,7 +2245,7 @@ function FinanceSection({ clients, finance, saveFinanceDoc, deleteFinanceDoc, fi
           { label:"Incassato",    val:entrateInc,    color:"var(--accent)",  icon:"arrowUp"   },
           { label:"Da incassare",  val:entrateAttesa, color:"#d97706",        icon:"clock"     },
           { label:"Uscite",        val:uscite,        color:"var(--danger)",  icon:"arrowDown" },
-          { label:"Margine netto",                    val:entrate-uscite, color:"#185FA5",     icon:"trendUp"   },
+          { label:"Margine netto",                    val:entrateInc-uscite, color:"#185FA5",  icon:"trendUp"   },
           { label:"Da incassare",                     val:daIncassare, color:"var(--warn)",    icon:"receipt"   },
           { label:"Fatture scadute",                  val:scadute,     color:"var(--danger)",  icon:"receipt"   },
           { label:"Canoni mensili",                   val:totCanoni,   color:"#6366f1",        icon:"repeat"    },
@@ -2393,8 +2395,8 @@ function FinanceSection({ clients, finance, saveFinanceDoc, deleteFinanceDoc, fi
                 <span>Entrate: <strong style={{color:"var(--accent)"}}>{fmt(entrate)}</strong></span>
                 <span>Uscite: <strong style={{color:"var(--danger)"}}>{fmt(uscite)}</strong></span>
               </div>
-              <span style={{fontWeight:600,fontSize:"var(--fs-sm)",color:entrate-uscite>=0?"#185FA5":"var(--danger)"}}>
-                Saldo: {fmt(entrate-uscite)}
+              <span style={{fontWeight:600,fontSize:"var(--fs-sm)",color:entrateInc-uscite>=0?"#185FA5":"var(--danger)"}}>
+                Saldo: {fmt(entrateInc-uscite)}
               </span>
             </div>
           )}
