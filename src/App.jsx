@@ -72,11 +72,11 @@ const FONT_SIZES = [
 const PLATFORMS = ["Instagram", "Facebook", "TikTok", "Tutte"];
 const POST_STATUSES = ["Da Girare", "Da Editare", "Pronto", "Programmato", "Pubblicato"];
 const STATUS_COLORS = {
-  "Da Girare":   { bg: "#f59e0b", light: "#fffbeb", text: "#92400e" },
-  "Da Editare":  { bg: "#ef4444", light: "#fef2f2", text: "#991b1b" },
-  "Pronto":      { bg: "#22c55e", light: "#f0fdf4", text: "#166534" },
-  "Programmato": { bg: "#6366f1", light: "#eef2ff", text: "#3730a3" },
-  "Pubblicato":  { bg: "#0ea5e9", light: "#f0f9ff", text: "#075985" },
+  "Da Girare":   { bg: "#F0A22B", light: "#FCEFD5", text: "#6A4308" },
+  "Da Editare":  { bg: "#E5484D", light: "#FCE4E5", text: "#7A1F22" },
+  "Pronto":      { bg: "#2FB673", light: "#DDF5E7", text: "#14532D" },
+  "Programmato": { bg: "#6C63FF", light: "#E8E6FF", text: "#2E2A8A" },
+  "Pubblicato":  { bg: "#2AA7E0", light: "#DDF1FB", text: "#0D4A6B" },
 };
 const PALETTE = ["#e74c3c","#e91e63","#9c27b0","#673ab7","#3f51b5","#2196f3","#03a9f4","#00bcd4","#009688","#4caf50","#8bc34a","#cddc39","#ffeb3b","#ffc107","#ff9800","#ff5722","#795548","#607d8b","#f06292","#ba68c8","#81d4fa","#80cbc4","#a5d6a7","#ffcc02","#ff7043","#26c6da","#66bb6a","#ab47bc","#5c6bc0","#ec407a"];
 const DAYS_IT   = ["Dom","Lun","Mar","Mer","Gio","Ven","Sab"];
@@ -156,82 +156,82 @@ function buildCSS(fontFamily, fontSize) {
   return `
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg: #f8f7f4; --surface: #ffffff; --surface2: #f1f0ec;
-      --border: #e8e6e0; --border2: #d4d0c8;
-      --text: #1a1814; --text2: #6b6760; --text3: #9b9891;
-      --accent: #2d6a4f; --accent2: #40916c; --accentbg: #d8f3dc;
-      --danger: #c1121f; --dangerbg: #ffe5e5;
-      --warn: #e07c24; --warnbg: #fff3e0;
-      --shadow: 0 1px 3px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.06);
-      --shadow2: 0 2px 8px rgba(0,0,0,.08), 0 8px 32px rgba(0,0,0,.08);
-      --radius: 12px; --radius2: 8px;
+      --bg: #F4F5F7; --surface: #FFFFFF; --surface2: #F8F9FB; --surface3: #EEF0F3;
+      --border: #EEF0F3; --border2: #E2E5EA;
+      --text: #1C1C1E; --text2: #6F7075; --text3: #A1A1A6;
+      --accent: #1F7A5C; --accent2: #186349; --accentbg: #DCF1E7;
+      --danger: #E5484D; --dangerbg: #FCE4E5;
+      --warn: #F0A22B; --warnbg: #FCEFD5;
+      --shadow: 0 1px 2px rgba(20,20,30,.04), 0 8px 24px rgba(20,20,30,.05);
+      --shadow2: 0 24px 64px rgba(20,20,30,.16);
+      --radius: 20px; --radius2: 14px; --pill: 999px;
       --font: '${fontFamily}', system-ui, sans-serif;
       --fs: ${fontSize}px;
       --fs-sm: ${fontSize - 1.5}px; --fs-xs: ${fontSize - 2.5}px;
-      --fs-lg: ${fontSize + 2}px; --fs-xl: ${fontSize + 6}px;
-      --fs-2xl: ${fontSize + 10}px;
-      --transition: all .18s cubic-bezier(.4,0,.2,1);
+      --fs-lg: ${fontSize + 2}px; --fs-xl: ${fontSize + 8}px;
+      --fs-2xl: ${fontSize + 14}px;
+      --transition: all .16s cubic-bezier(.4,0,.2,1);
     }
     body { font-family: var(--font); background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; font-size: var(--fs); }
     input, select, textarea, button { font-family: var(--font); font-size: var(--fs); }
-    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
 
-    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: calc(var(--fs) * .6) calc(var(--fs) * 1.2); border-radius: var(--radius2); border: none; cursor: pointer; font-size: var(--fs-sm); font-weight: 600; font-family: var(--font); transition: var(--transition); user-select: none; white-space: nowrap; line-height: 1.4; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: calc(var(--fs) * .65) calc(var(--fs) * 1.15); border-radius: var(--pill); border: none; cursor: pointer; font-size: var(--fs-sm); font-weight: 500; font-family: var(--font); transition: var(--transition); user-select: none; white-space: nowrap; line-height: 1.4; }
     .btn:active { transform: scale(.97); }
     .btn-primary { background: var(--accent); color: #fff; }
-    .btn-primary:hover { background: var(--accent2); box-shadow: 0 4px 12px rgba(45,106,79,.28); transform: translateY(-1px); }
-    .btn-primary:disabled { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; }
-    .btn-ghost { background: transparent; color: var(--text2); border: 1.5px solid var(--border); }
-    .btn-ghost:hover { background: var(--surface2); border-color: var(--border2); color: var(--text); }
-    .btn-danger { background: var(--dangerbg); color: var(--danger); border: 1.5px solid #ffc5c5; }
-    .btn-danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
-    .btn-sm { padding: calc(var(--fs-sm) * .45) calc(var(--fs-sm) * .9); font-size: var(--fs-xs); }
-    .btn-icon { padding: calc(var(--fs) * .45); border-radius: calc(var(--radius2) - 1px); width: calc(var(--fs) * 2.2); height: calc(var(--fs) * 2.2); }
+    .btn-primary:hover { background: var(--accent2); }
+    .btn-primary:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+    .btn-ghost { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+    .btn-ghost:hover { background: var(--surface2); }
+    .btn-danger { background: var(--dangerbg); color: #7A1F22; }
+    .btn-danger:hover { background: var(--danger); color: #fff; }
+    .btn-sm { padding: calc(var(--fs-sm) * .5) calc(var(--fs-sm) * .95); font-size: var(--fs-xs); }
+    .btn-icon { padding: calc(var(--fs) * .5); border-radius: 12px; width: calc(var(--fs) * 2.3); height: calc(var(--fs) * 2.3); }
 
-    .input { width: 100%; padding: calc(var(--fs) * .65) calc(var(--fs) * .9); border-radius: var(--radius2); background: var(--surface); border: 1.5px solid var(--border); color: var(--text); font-size: var(--fs); font-family: var(--font); transition: var(--transition); outline: none; }
-    .input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(45,106,79,.1); }
+    .input { width: 100%; padding: calc(var(--fs) * .72) calc(var(--fs) * .95); border-radius: var(--radius2); background: var(--surface2); border: 1.5px solid transparent; color: var(--text); font-size: var(--fs); font-family: var(--font); transition: var(--transition); outline: none; }
+    .input:focus { background: var(--surface); border-color: var(--accent); box-shadow: 0 0 0 4px var(--accentbg); }
     .input::placeholder { color: var(--text3); }
 
-    .card { background: var(--surface); border-radius: var(--radius); border: 1.5px solid var(--border); box-shadow: var(--shadow); }
-    .nav-item { display: flex; align-items: center; gap: 9px; width: 100%; padding: calc(var(--fs) * .6) calc(var(--fs) * 1.1); border: none; cursor: pointer; font-size: var(--fs-sm); font-weight: 500; font-family: var(--font); border-radius: var(--radius2); transition: var(--transition); background: transparent; color: var(--text2); text-align: left; }
-    .nav-item:hover { background: var(--surface2); color: var(--text); }
-    .nav-item.active { background: var(--accentbg); color: var(--accent); font-weight: 600; }
+    .card { background: var(--surface); border-radius: var(--radius); border: none; box-shadow: var(--shadow); }
+    .nav-item { display: flex; align-items: center; gap: 11px; width: 100%; padding: calc(var(--fs) * .7) calc(var(--fs) * .95); border: none; cursor: pointer; font-size: var(--fs-sm); font-weight: 500; font-family: var(--font); border-radius: var(--radius2); transition: var(--transition); background: transparent; color: var(--text2); text-align: left; }
+    .nav-item:hover { background: rgba(0,0,0,.035); color: var(--text); }
+    .nav-item.active { background: var(--surface); color: var(--accent); box-shadow: var(--shadow); }
 
-    .stat-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: calc(var(--fs) * 1.3) calc(var(--fs) * 1.5); cursor: pointer; transition: var(--transition); box-shadow: var(--shadow); }
-    .stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow2); border-color: var(--border2); }
-    .stat-card.active { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(45,106,79,.1); }
+    .stat-card { background: var(--surface); border: none; border-radius: var(--radius); padding: calc(var(--fs) * 1.4) calc(var(--fs) * 1.5); cursor: pointer; transition: var(--transition); box-shadow: var(--shadow); }
+    .stat-card:hover { transform: translateY(-2px); }
+    .stat-card.active { box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
 
-    .post-row { display: flex; align-items: center; gap: 12px; padding: calc(var(--fs) * .75) calc(var(--fs) * 1.1); border-radius: var(--radius2); background: var(--surface); border: 1.5px solid var(--border); transition: var(--transition); cursor: pointer; }
-    .post-row:hover { border-color: var(--border2); box-shadow: var(--shadow); transform: translateX(2px); }
+    .post-row { display: flex; align-items: center; gap: 12px; padding: calc(var(--fs) * .78) calc(var(--fs) * .8); border-radius: var(--radius2); background: transparent; border: none; transition: var(--transition); cursor: pointer; }
+    .post-row:hover { background: var(--surface2); }
 
-    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.32); backdrop-filter: blur(4px); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
-    .modal { background: var(--surface); border-radius: 16px; border: 1.5px solid var(--border); box-shadow: var(--shadow2); width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; animation: slideUp .22s cubic-bezier(.4,0,.2,1); }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(20,20,30,.28); backdrop-filter: blur(6px); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .modal { background: var(--surface); border-radius: 24px; border: none; box-shadow: var(--shadow2); width: 100%; max-width: 640px; max-height: 92vh; overflow-y: auto; animation: slideUp .22s cubic-bezier(.4,0,.2,1); }
     @keyframes slideUp { from { opacity:0; transform: translateY(14px); } to { opacity:1; transform: translateY(0); } }
 
     .cal-cell { background: var(--surface); min-height: 96px; padding: 6px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); cursor: pointer; transition: background .12s; }
     .cal-cell:hover { background: var(--surface2); }
-    .cal-cell.today { background: #f0faf4; }
-    .cal-cell.other-month { background: #fafaf8; }
-    .cal-cell.other-month .cal-day-num { color: #c8c5be; }
+    .cal-cell.today { background: var(--accentbg); }
+    .cal-cell.other-month { background: var(--surface2); }
+    .cal-cell.other-month .cal-day-num { color: var(--text3); }
 
-    .cal-tag { font-size: var(--fs-xs); padding: 2px 5px; border-radius: 5px; margin-bottom: 2px; cursor: pointer; transition: var(--transition); display: flex; align-items: center; gap: 3px; white-space: nowrap; overflow: hidden; }
-    .cal-tag:hover { filter: brightness(.93); transform: scale(1.02); }
+    .cal-tag { font-size: var(--fs-xs); padding: 3px 7px; border-radius: 8px; margin-bottom: 3px; cursor: pointer; transition: var(--transition); display: flex; align-items: center; gap: 3px; white-space: nowrap; overflow: hidden; }
+    .cal-tag:hover { filter: brightness(.95); }
 
-    .tooltip { position: fixed; z-index: 9999; pointer-events: none; background: #1a1814; color: #fff; border-radius: 10px; padding: 10px 14px; font-size: var(--fs-xs); max-width: 240px; box-shadow: 0 8px 32px rgba(0,0,0,.22); animation: fadeIn .12s ease; }
+    .tooltip { position: fixed; z-index: 9999; pointer-events: none; background: #1C1C1E; color: #fff; border-radius: 14px; padding: 10px 14px; font-size: var(--fs-xs); max-width: 240px; box-shadow: var(--shadow2); animation: fadeIn .12s ease; }
     @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
 
-    .pill-tabs { display: flex; background: var(--surface2); border-radius: 9px; padding: 3px; gap: 2px; border: 1.5px solid var(--border); }
-    .pill-tab { padding: calc(var(--fs-sm) * .45) calc(var(--fs-sm) * 1.1); border-radius: 7px; border: none; cursor: pointer; font-size: var(--fs-sm); font-weight: 500; font-family: var(--font); transition: var(--transition); background: transparent; color: var(--text2); }
-    .pill-tab.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); font-weight: 600; }
+    .pill-tabs { display: inline-flex; background: var(--surface3); border-radius: var(--pill); padding: 4px; gap: 2px; border: none; }
+    .pill-tab { padding: calc(var(--fs-sm) * .55) calc(var(--fs-sm) * 1.15); border-radius: var(--pill); border: none; cursor: pointer; font-size: var(--fs-sm); font-weight: 500; font-family: var(--font); transition: var(--transition); background: transparent; color: var(--text2); }
+    .pill-tab.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
     .pill-tab:hover:not(.active) { color: var(--text); }
 
-    .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 99px; font-size: var(--fs-xs); font-weight: 600; border: 1.5px solid transparent; }
-    .label { font-size: var(--fs-xs); font-weight: 600; color: var(--text2); margin-bottom: 5px; display: block; letter-spacing: .03em; text-transform: uppercase; }
+    .chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 11px; border-radius: var(--pill); font-size: var(--fs-xs); font-weight: 500; border: none; }
+    .label { font-size: var(--fs-xs); font-weight: 500; color: var(--text2); margin-bottom: 6px; display: block; }
     .field { display: flex; flex-direction: column; }
-    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: calc(var(--fs) * 1.6); flex-wrap: wrap; gap: 12px; }
-    .page-title { font-size: var(--fs-xl); font-weight: 700; color: var(--text); }
+    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: calc(var(--fs) * 1.5); flex-wrap: wrap; gap: 12px; }
+    .page-title { font-size: var(--fs-xl); font-weight: 600; color: var(--text); letter-spacing: -.01em; }
     .empty-state { text-align: center; padding: calc(var(--fs) * 3) 20px; color: var(--text3); }
     .title-tt { display: none !important; }
     div:hover > div > .title-tt { display: block !important; }
@@ -239,7 +239,6 @@ function buildCSS(fontFamily, fontSize) {
     .empty-state svg { margin-bottom: 12px; opacity: .4; }
     .empty-state p { font-size: var(--fs); }
 
-    /* FIX: iOS momentum scrolling on the two calendar scroll containers */
     #cal-scroll-body, #cal-scroll-body-mobile {
       -webkit-overflow-scrolling: touch;
       overscroll-behavior: contain;
@@ -249,19 +248,15 @@ function buildCSS(fontFamily, fontSize) {
     @media (max-width: 768px) {
       .sidebar { display: none !important; }
       .mob-nav-bar { display: flex !important; }
-      .main-content { padding-bottom: 64px !important; }
+      .main-content { padding-bottom: 84px !important; }
       .section-header { flex-direction: column; align-items: flex-start; gap: 10px; }
       .page-title { font-size: var(--fs-lg) !important; }
       .stat-grid { grid-template-columns: 1fr 1fr !important; }
       .clients-grid { grid-template-columns: 1fr !important; }
-      .modal { max-width: 100% !important; margin: 0 !important; border-radius: 16px 16px 0 0 !important; max-height: 92vh !important; }
+      .modal { max-width: 100% !important; margin: 0 !important; border-radius: 24px 24px 0 0 !important; max-height: 92vh !important; }
       .modal-overlay { align-items: flex-end !important; padding: 0 !important; }
       .post-row { flex-wrap: wrap; }
       .cal-desktop { display: none !important; }
-      /* FIX: block display; the inner scroll container uses an explicit
-         height (100dvh minus header heights) rather than flex, which is
-         far more reliable across Android Chrome / iOS Safari when the
-         parent chain includes other scrollable/overflow elements. */
       .cal-mobile  { display: block !important; }
       .cal-page    { padding: 0 !important; height: 100%; }
     }
@@ -271,7 +266,6 @@ function buildCSS(fontFamily, fontSize) {
       .cal-desktop  { display: block !important; }
       .cal-mobile   { display: none !important; }
     }
-    /* Column visibility handled dynamically in JS via useWindowWidth */
   `;
 }
 
@@ -381,17 +375,19 @@ export default function App() {
 
   return (
     <div style={{ display:"flex", height:"100vh", overflow:"hidden" }}>
-      <aside className="sidebar" style={{ width:220, flexShrink:0, background:"#fff", borderRight:"1.5px solid var(--border)", display:"flex", flexDirection:"column", overflowY:"auto" }}>
-        <div style={{ padding:"20px 18px 15px", borderBottom:"1.5px solid var(--border)" }}>
-          <div style={{ fontSize:"var(--fs-lg)", fontWeight:700, color:"var(--text)", display:"flex", alignItems:"center", gap:8 }}>
-            <div style={{ background:"var(--accentbg)", borderRadius:8, padding:5, display:"flex" }}>
-              <Icon name="bell" size={16} color="var(--accent)" />
+      <aside className="sidebar" style={{ width:232, flexShrink:0, background:"transparent", display:"flex", flexDirection:"column", overflowY:"auto", padding:"20px 14px" }}>
+        <div style={{ padding:"8px 10px 22px" }}>
+          <div style={{ fontSize:"var(--fs-lg)", fontWeight:600, color:"var(--text)", display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ background:"var(--accent)", borderRadius:12, width:38, height:38, display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <Icon name="bell" size={18} color="#fff" />
             </div>
-            {lbl("app_name", "SocialCal")}
+            <div>
+              <div>{lbl("app_name", "SocialCal")}</div>
+              <div style={{ fontSize:"var(--fs-xs)", color:"var(--text2)", fontWeight:400 }}>Editorial manager</div>
+            </div>
           </div>
-          <div style={{ fontSize:"var(--fs-xs)", color:"var(--text3)", marginTop:3, fontWeight:500 }}>Editorial Manager</div>
         </div>
-        <nav style={{ flex:1, padding:"10px 8px" }}>
+        <nav style={{ flex:1, display:"flex", flexDirection:"column", gap:6 }}>
           {nav.map(n => (
             <button key={n.id} className={"nav-item" + (section===n.id ? " active" : "")} onClick={() => setSection(n.id)}>
               <Icon name={n.icon} size={15} color={section===n.id ? "var(--accent)" : "var(--text3)"} />
@@ -399,9 +395,9 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <div style={{ padding:"12px 14px", borderTop:"1.5px solid var(--border)" }}>
+        <div style={{ padding:12, background:"var(--surface)", borderRadius:"var(--radius2)", boxShadow:"var(--shadow)", marginTop:12 }}>
           <div style={{ display:"flex", alignItems:"center", gap:9, marginBottom:9 }}>
-            <div style={{ width:32, height:32, borderRadius:"50%", background:"var(--accentbg)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, color:"var(--accent)", fontSize:"var(--fs-sm)", flexShrink:0 }}>
+            <div style={{ width:34, height:34, borderRadius:"50%", background:"var(--accentbg)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:600, color:"#0F4A37", fontSize:"var(--fs-sm)", flexShrink:0 }}>
               {user.name?.[0]?.toUpperCase()}
             </div>
             <div style={{ minWidth:0 }}>
@@ -435,17 +431,18 @@ export default function App() {
 
       {/* Mobile bottom nav */}
       <nav className="mob-nav-bar" style={{
-        position:"fixed", bottom:0, left:0, right:0, zIndex:200,
-        background:"var(--surface)", borderTop:"1.5px solid var(--border)",
-        display:"flex", padding:"0 0 env(safe-area-inset-bottom,0)"
+        position:"fixed", bottom:"calc(12px + env(safe-area-inset-bottom,0px))", left:12, right:12, zIndex:200,
+        background:"var(--surface)", borderRadius:"var(--pill)", padding:6,
+        boxShadow:"0 8px 28px rgba(20,20,30,.14)", display:"flex", gap:2
       }}>
         {nav.map(n => (
           <button key={n.id} onClick={()=>setSection(n.id)}
-            style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
-              padding:"10px 4px 8px", border:"none", cursor:"pointer", background:"transparent",
-              color: section===n.id ? "var(--accent)" : "var(--text3)", transition:"var(--transition)", gap:3 }}>
-            <Icon name={n.icon} size={20} color={section===n.id?"var(--accent)":"var(--text3)"}/>
-            <span style={{ fontSize:10, fontWeight:section===n.id?600:400, fontFamily:"var(--font)" }}>{n.label}</span>
+            style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center",
+              padding:"11px 4px", border:"none", cursor:"pointer", borderRadius:"var(--pill)",
+              background: section===n.id ? "var(--accent)" : "transparent",
+              color: section===n.id ? "#fff" : "var(--text3)", transition:"var(--transition)" }}
+            aria-label={n.label}>
+            <Icon name={n.icon} size={20} color={section===n.id?"#fff":"var(--text3)"}/>
           </button>
         ))}
       </nav>
@@ -947,8 +944,8 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
     const isToday=dateStr===today();
     const d=new Date(dateStr+"T00:00:00"), dow=DAYS_IT[d.getDay()], dayNum=d.getDate();
     const isWeekend=d.getDay()===0||d.getDay()===6;
-    const rowBg=isToday?"#f0fdf4":isWeekend?"#fafaf9":"var(--surface)";
-    const dayCellBg=isToday?"#edf7f2":isWeekend?"#f5f4f2":"var(--surface2)";
+    const rowBg=isToday?"var(--accentbg)":isWeekend?"var(--surface2)":"var(--surface)";
+    const dayCellBg=isToday?"#CFEBDD":isWeekend?"var(--surface3)":"var(--surface2)";
 
     const DayCell = ({ transparent }) => (
       <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
@@ -1347,7 +1344,7 @@ function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBo
         const DayCell=(
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
             gap:1,padding:"4px 2px",borderRight:"1px solid var(--border)",width:44,flexShrink:0,
-            background:isToday?"#edf7f2":isWeekend?"#f5f4f2":"var(--surface2)"}}>
+            background:isToday?"#CFEBDD":isWeekend?"var(--surface3)":"var(--surface2)"}}>
             <div style={{fontSize:8,fontWeight:600,color:isToday?"var(--accent)":"var(--text3)",letterSpacing:".04em"}}>{dow}</div>
             {isToday
               ? <div style={{width:22,height:22,background:"var(--accent)",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:11,fontWeight:700}}>{dayNum}</div>
@@ -1369,7 +1366,7 @@ function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBo
             {/* Empty day */}
             {dayPosts.length===0&&slots.length===0&&(
               <div style={{display:"flex",borderBottom:"1px solid var(--border)",minHeight:32,
-                background:isToday?"#f0fdf4":isWeekend?"#fafaf9":"var(--surface)",
+                background:isToday?"var(--accentbg)":isWeekend?"var(--surface2)":"var(--surface)",
                 cursor:"pointer",alignItems:"stretch"}}
                 onClick={()=>onSlotClick(ds)}>
                 {DayCell}
@@ -1380,10 +1377,10 @@ function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBo
             {/* Slots */}
             {slots.map((c,si)=>(
               <div key={c.id} style={{display:"flex",borderBottom:"0.5px solid var(--border)",minHeight:38,
-                background:isToday?"#f0fdf4":isWeekend?"#fafaf9":"var(--surface)",
+                background:isToday?"var(--accentbg)":isWeekend?"var(--surface2)":"var(--surface)",
                 cursor:"pointer",alignItems:"stretch"}}
                 onClick={()=>onClientSlotClick(ds,c)}>
-                {si===0&&dayPosts.length===0?DayCell:<div style={{width:44,flexShrink:0,borderRight:"1px solid var(--border)",background:isToday?"#edf7f2":isWeekend?"#f5f4f2":"var(--surface2)"}}/>}
+                {si===0&&dayPosts.length===0?DayCell:<div style={{width:44,flexShrink:0,borderRight:"1px solid var(--border)",background:isToday?"#CFEBDD":isWeekend?"var(--surface3)":"var(--surface2)"}}/>}
                 <div style={{flex:1,display:"flex",alignItems:"center",padding:"0 8px"}}>
                   <div style={{borderLeft:`2px dashed ${c.color}`,background:c.color+"08",flex:1,
                     display:"flex",alignItems:"center",gap:7,padding:"6px 8px",borderRadius:"0 4px 4px 0"}}>
@@ -1397,7 +1394,7 @@ function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBo
             {/* First post */}
             {dayPosts.length>0&&(
               <div style={{display:"flex",borderBottom:dayPosts.length>1&&!isExpanded?"1px solid var(--border)":"none",
-                background:isToday?"#f0fdf4":isWeekend?"#fafaf9":"var(--surface)",alignItems:"stretch"}}>
+                background:isToday?"var(--accentbg)":isWeekend?"var(--surface2)":"var(--surface)",alignItems:"stretch"}}>
                 {DayCell}
                 <div style={{flex:1,minWidth:0}}>
                   <PostCard p={dayPosts[0]} isToday={isToday}/>
@@ -2092,7 +2089,7 @@ function Settings({ users, onSaveUser, onDeleteUser, lbl, setLbl, currentUser, f
               <div style={{ fontWeight:700, fontSize:"var(--fs-xl)", marginBottom:5 }}>Calendario Editoriale</div>
               <div style={{ fontSize:"var(--fs-sm)", color:"var(--text2)", marginBottom:10 }}>Gestisci i tuoi contenuti social in modo semplice ed efficace.</div>
               <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                <span className="chip" style={{ background:"#f0fdf4", color:"#166534", borderColor:"#22c55e44" }}>Pronto</span>
+                <span className="chip" style={{ background:"var(--accentbg)", color:"#166534", borderColor:"#22c55e44" }}>Pronto</span>
                 <span className="chip" style={{ background:"#eef2ff", color:"#3730a3", borderColor:"#6366f144" }}>Programmato</span>
                 <span className="chip" style={{ background:"#f0f9ff", color:"#075985", borderColor:"#0ea5e944" }}>Pubblicato</span>
               </div>
@@ -2555,7 +2552,7 @@ function FinanceForm({ type, item, clients, finMemDoc, addFinMemory, categoriesI
               <div style={{display:"flex",gap:8}}>
                 <button onClick={()=>upd("collectStatus","incassato")}
                   style={{flex:1,padding:"8px",borderRadius:"var(--radius2)",border:`1.5px solid ${form.collectStatus==="incassato"?"#22c55e":"var(--border)"}`,
-                    background:form.collectStatus==="incassato"?"#f0fdf4":"transparent",
+                    background:form.collectStatus==="incassato"?"var(--accentbg)":"transparent",
                     color:form.collectStatus==="incassato"?"#166534":"var(--text2)",
                     cursor:"pointer",fontWeight:600,fontSize:"var(--fs-sm)",fontFamily:"var(--font)",
                     display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
