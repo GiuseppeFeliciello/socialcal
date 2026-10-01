@@ -151,6 +151,96 @@ function removeHashtagFromText(text, tag) {
   return text.replace(re, "").replace(/[ \t]{2,}/g, " ").replace(/\s+$/gm, "").trim();
 }
 
+// ── Caption <-> hashtag cells helpers ───────────────────────────────────────
+function escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+
+// Is this hashtag present in the text as a whole token (case-insensitive)?
+function textHasHashtag(text, tag) {
+  if (!text || !tag) return false;
+  const key = tag.toLowerCase();
+  return (text.match(/#[\p{L}0-9_]+/gu) || []).some(m => m.toLowerCase() === key);
+}
+
+// Replace the first whole-token occurrence of `oldTag` with `newTag`.
+// Returns { text, cursor } or null when oldTag isn't in the text.
+function replaceHashtagInText(text, oldTag, newTag) {
+  const re = new RegExp("#[\\p{L}0-9_]+", "gu");
+  let m;
+  while ((m = re.exec(text))) {
+    if (m[0].toLowerCase() === oldTag.toLowerCase()) {
+      const out = text.slice(0, m.index) + newTag + text.slice(m.index + m[0].length);
+      return { text: out, cursor: m.index + newTag.length };
+    }
+  }
+  return null;
+}
+
+// Remove the first whole-token occurrence of `tag`, tidying the spaces around it.
+function cutHashtagFromText(text, tag) {
+  const re = new RegExp("#[\\p{L}0-9_]+", "gu");
+  let m;
+  while ((m = re.exec(text))) {
+    if (m[0].toLowerCase() === tag.toLowerCase()) {
+      let before = text.slice(0, m.index), after = text.slice(m.index + m[0].length);
+      // keep exactly one space between the neighbours if both sides have text on the same line
+      before = before.replace(/[ \t]+$/, "");
+      after = after.replace(/^[ \t]+/, "");
+      const sep = (before && !before.endsWith("\n") && after && !after.startsWith("\n")) ? " " : "";
+      return { text: before + sep + after, cursor: before.length + sep.length };
+    }
+  }
+  return null;
+}
+
+// Insert a hashtag at `pos`, always separated from its neighbours by one space.
+function insertHashtagInText(text, tag, pos) {
+  const p = (pos == null || pos > text.length) ? text.length : pos;
+  let before = text.slice(0, p).replace(/[ \t]+$/, "");
+  let after = text.slice(p).replace(/^[ \t]+/, "");
+  const lead = (before === "" || before.endsWith("\n")) ? "" : " ";
+  const trail = (after === "" || after.startsWith("\n")) ? "" : " ";
+  const head = before + lead + tag + trail;
+  return { text: head + after, cursor: head.length };
+}
+
+// Overlay click-to-close that only fires when the press STARTED and ENDED on
+// the dark overlay itself. A text selection dragged out of a panel ends with a
+// click on the overlay, which used to close the panel and lose the edits.
+let _overlayPressedOnSelf = false;
+function overlayClose(fn) {
+  return {
+    onPointerDown: e => { _overlayPressedOnSelf = e.target === e.currentTarget; },
+    onClick: e => {
+      const ok = _overlayPressedOnSelf && e.target === e.currentTarget;
+      _overlayPressedOnSelf = false;
+      if (ok) fn();
+    },
+  };
+}
+
+// Textarea that grows with its content (paste, typing, reopening a saved post).
+function AutoTextarea({ value, onChange, minHeight = 52, innerRef, ...rest }) {
+  const localRef = useRef(null);
+  const ref = innerRef || localRef;
+  function fit() {
+    const el = ref.current;
+    if (!el) return;
+    const scroller = el.closest(".modal");
+    const st = scroller ? scroller.scrollTop : 0;
+    el.style.height = "auto";
+    el.style.height = Math.max(minHeight, el.scrollHeight + 2) + "px";
+    if (scroller) scroller.scrollTop = st;
+  }
+  useLayoutEffect(fit, [value]);
+  useEffect(() => {
+    window.addEventListener("resize", fit);
+    const t = setTimeout(fit, 120); // after fonts/animation settle
+    return () => { window.removeEventListener("resize", fit); clearTimeout(t); };
+  }, []);
+  return <textarea ref={ref} className="input" value={value} onChange={onChange}
+    style={{ minHeight, resize:"none", overflow:"hidden" }} {...rest}/>;
+}
+
 /* ─── GLOBAL CSS ─────────────────────────────────────────────────────────── */
 function buildCSS(fontFamily, fontSize) {
   return `
@@ -661,6 +751,8 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
   const desktopScrollRef = useRef(null);
   const mobileScrollRef = useRef(null);
   const prevScrollHeightRef = useRef({ desktop: 0, mobile: 0 });
+  const anchoredRef = useRef(true);            // true until the person scrolls by hand
+  const releaseAnchor = () => { anchoredRef.current = false; };
   const [pastDays, setPastDays] = useState(14);
   const [futureDays, setFutureDays] = useState(90);
 
@@ -675,7 +767,7 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
   // React concurrent rendering, etc.), which is why "today" wasn't always
   // reached even on desktop. This retries every frame for up to ~2s.
   function scrollToTodayIn(container, attempt = 0) {
-    if (!container) return;
+    if (!container || container.clientHeight === 0) return; // hidden (other layout)
     const target = container.querySelector("[data-today]");
     if (!target) {
       if (attempt < 120) requestAnimationFrame(() => scrollToTodayIn(container, attempt + 1));
@@ -694,6 +786,7 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
   // rAF-retry helper each time so it's a no-op once already scrolled.
   useEffect(() => {
     const scrollBoth = () => {
+      if (!anchoredRef.current) return;
       scrollToTodayIn(desktopScrollRef.current);
       scrollToTodayIn(mobileScrollRef.current);
     };
@@ -702,6 +795,19 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
     const t2 = setTimeout(scrollBoth, 500);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);
+
+  // Posts/clients load asynchronously and change row heights (days with posts
+  // are taller). While the person hasn't scrolled yet, keep today in place so
+  // the calendar always opens on the current day.
+  useLayoutEffect(() => {
+    if (!anchoredRef.current) return;
+    for (const c of [desktopScrollRef.current, mobileScrollRef.current]) {
+      if (!c || c.clientHeight === 0) continue;
+      const t = c.querySelector("[data-today]");
+      if (!t) continue;
+      c.scrollTop += t.getBoundingClientRect().top - c.getBoundingClientRect().top - c.clientHeight / 3;
+    }
+  }, [posts, clients, view, winW]);
 
   useEffect(() => {
     function handleClick() { setOpenMenu(null); }
@@ -747,6 +853,8 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
   // same rAF-retry helper as the initial mount scroll.
   function goToday() {
     const n=new Date(); setYear(n.getFullYear()); setMonth(n.getMonth());
+    const w=new Date(); w.setDate(w.getDate()-w.getDay()); setWeekStart(w);   // week view too
+    anchoredRef.current = true;
     requestAnimationFrame(() => {
       scrollToTodayIn(desktopScrollRef.current);
       scrollToTodayIn(mobileScrollRef.current);
@@ -960,7 +1068,7 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
 
     // Empty day — no posts, no slots
     if (dayPosts.length===0 && slots.length===0) return (
-      <div data-today={isToday||undefined}
+      <div
         style={{display:"grid",gridTemplateColumns:COLS,borderBottom:"1px solid var(--border)",minHeight:32,background:rowBg,cursor:"pointer",alignItems:"stretch"}}
         onClick={()=>setNewPostData({date:dateStr})}>
         <DayCell/>
@@ -972,7 +1080,7 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
       <>
         {/* Slot rows — no post yet */}
         {slots.map((c,i) => (
-          <div key={`slot_${c.id}`} data-today={isToday&&dayPosts.length===0&&i===0||undefined}
+          <div key={`slot_${c.id}`}
             style={{display:"grid",gridTemplateColumns:COLS,borderBottom:"0.5px solid var(--border)",minHeight:38,background:rowBg,cursor:"pointer",alignItems:"stretch"}}
             onClick={()=>setNewPostData({date:dateStr,clientId:c.id,clientName:c.name})}>
             {i===0 && dayPosts.length===0 ? <DayCell/> : <div style={{width:50,borderRight:"1px solid var(--border)",background:dayCellBg}}/>}
@@ -994,7 +1102,7 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
           const clientColor=cl?.color||"#94a3b8";
           const bColor=clientBorderColor(p);
           return (
-            <div key={p.id} data-today={isToday&&slots.length===0&&i===0||undefined}
+            <div key={p.id}
               style={{display:"grid",gridTemplateColumns:COLS,
                 borderBottom:i===dayPosts.length-1?"1px solid var(--border)":"0.5px solid var(--border)",
                 minHeight:44,background:rowBg,alignItems:"stretch"}}>
@@ -1111,7 +1219,7 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
         <h1 className="page-title">{lbl("cal_title","Calendario Editoriale")}</h1>
         <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
           <div className="pill-tabs">
-            <button className={"pill-tab"+(view==="vertical"?" active":"")} onClick={()=>setView("vertical")}>Verticale</button>
+            <button className={"pill-tab"+(view==="vertical"?" active":"")} onClick={()=>{ anchoredRef.current=true; setView("vertical"); }}>Verticale</button>
             <button className={"pill-tab"+(view==="week"?" active":"")} onClick={()=>setView("week")}>Settimana</button>
           </div>
           {view==="week"&&<>
@@ -1154,11 +1262,11 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
               </div>
             ))}
           </div>
-          <div id="cal-scroll-body" ref={desktopScrollRef} onScroll={e=>handleScroll(e.currentTarget,"desktop")} style={{maxHeight:"calc(100vh - 260px)",overflowY:"auto"}}>
+          <div id="cal-scroll-body" ref={desktopScrollRef} onScroll={e=>handleScroll(e.currentTarget,"desktop")} onWheel={releaseAnchor} onTouchStart={releaseAnchor} onPointerDown={releaseAnchor} onKeyDown={releaseAnchor} style={{maxHeight:"calc(100vh - 260px)",overflowY:"auto"}}>
             {vertDays.map((ds,i)=>{
               const d=new Date(ds+"T00:00:00"), showSep=d.getDate()===1||i===0;
               return (
-                <div key={ds}>
+                <div key={ds} data-today={ds===today()||undefined}>
                   {showSep&&(
                     <div style={{padding:"5px 12px",fontSize:"var(--fs-xs)",fontWeight:700,
                       color:"var(--text3)",letterSpacing:".06em",textTransform:"uppercase",
@@ -1243,14 +1351,15 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
           onClientSlotClick={(ds,c)=>setNewPostData({date:ds,clientId:c.id,clientName:c.name})}
           onPostClick={p=>setEditPost(p)}
           scrollRef={mobileScrollRef}
-          onScroll={e=>handleScroll(e.currentTarget,"mobile")}/>
+          onScroll={e=>handleScroll(e.currentTarget,"mobile")}
+          onUserScroll={releaseAnchor}/>
       </div>
     </div>
   );
 }
 
 /* ─── MOBILE CALENDAR ────────────────────────────────────────────────────── */
-function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBorderColor, onSlotClick, onClientSlotClick, onPostClick, scrollRef, onScroll }) {
+function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBorderColor, onSlotClick, onClientSlotClick, onPostClick, scrollRef, onScroll, onUserScroll }) {
   const [expanded, setExpanded] = useState({});
 
   const PMAP = {
@@ -1327,7 +1436,7 @@ function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBo
        minus the bottom nav bar (~64px). This works reliably on Android
        Chrome and iOS Safari, unlike flex:1 inside ambiguous parent chains
        which can collapse to 0 height and freeze/hide the scroll area. */
-    <div id="cal-scroll-body-mobile" ref={scrollRef} onScroll={onScroll}
+    <div id="cal-scroll-body-mobile" ref={scrollRef} onScroll={onScroll} onWheel={onUserScroll} onTouchStart={onUserScroll} onPointerDown={onUserScroll}
       style={{overflowY:"scroll",WebkitOverflowScrolling:"touch",height:"calc(100dvh - 118px - env(safe-area-inset-bottom, 0px))"}}>
       {vertDays.map((ds,i)=>{
         const d=new Date(ds+"T00:00:00");
@@ -1428,7 +1537,7 @@ function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBo
 
 
 /* ─── HASHTAG CELLS EDITOR (5 slots, per-post) ──────────────────────────── */
-function HashtagCellsEditor({ slots, onChange, clientId, posts }) {
+function HashtagCellsEditor({ slots, onChange, clientId, posts, copyText }) {
   const [openCell, setOpenCell] = useState(null);
   const [copied, setCopied] = useState(false);
 
@@ -1444,7 +1553,7 @@ function HashtagCellsEditor({ slots, onChange, clientId, posts }) {
   }, [openCell]);
 
   async function copyAll() {
-    const text = slots.filter(Boolean).join(" ");
+    const text = copyText != null ? copyText : slots.filter(Boolean).join(" ");
     if (!text) return;
     try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(()=>setCopied(false), 1500); } catch {}
   }
@@ -1524,14 +1633,9 @@ function PostModal({ post, defaultDate, defaultClientId, defaultClientName, clie
   const defaultPlatform = defaultClient?.platform?.toLowerCase().includes("tik") && defaultClient?.platform?.toLowerCase().includes("insta") && defaultClient?.platform?.toLowerCase().includes("face")
     ? "Tutte"
     : "Tutte";
-  // Parse an existing hashtags string into up to 5 slots for the cell editor.
-  // New posts start with 5 empty slots.
-  function parseHashtagsToSlots(str) {
-    const tags = extractHashtags(str || "");
-    const slots = [null,null,null,null,null];
-    for (let i=0;i<Math.min(5,tags.length);i++) slots[i] = tags[i];
-    return slots;
-  }
+  // The caption is the single source of truth for hashtags. The 5 cells are a
+  // shortcut to insert/replace hashtags in the caption; they always show what
+  // is actually in the caption.
   const [form, setForm] = useState(() => {
     const base = post || {
       title:"", clientId:defaultClientId||"", clientName:defaultClientName||"",
@@ -1539,22 +1643,72 @@ function PostModal({ post, defaultDate, defaultClientId, defaultClientName, clie
       caption:"", hashtags:"", firstComment:"", notes:"",
       igStatus:"—", fbStatus:"—", ttStatus:"—"
     };
-    return { ...base, hashtagSlots: parseHashtagsToSlots(base.hashtags) };
+    // Old posts: hashtags that lived only in the old separate field are
+    // appended to the caption so nothing is lost.
+    let caption = base.caption || "";
+    const missing = extractHashtags(base.hashtags || "").filter(t => !textHasHashtag(caption, t));
+    if (missing.length) caption = caption.trim() ? caption.replace(/\s+$/, "") + "\n\n" + missing.join(" ") : missing.join(" ");
+    return { ...base, caption };
   });
+  // Which hashtag each cell inserted (cell index -> tag). Seeded from the first 5 in the caption.
+  const [cellTags, setCellTags] = useState(() => {
+    const cap = (post?.caption || "");
+    const missing = extractHashtags(post?.hashtags || "").filter(t => !textHasHashtag(cap, t));
+    const merged = extractHashtags(cap + " " + missing.join(" "));
+    return [0,1,2,3,4].map(i => merged[i] || null);
+  });
+  const captionRef = useRef(null);
+  const selRef = useRef(null);       // last known caret position in the caption (null = never focused)
+  const pendingCursor = useRef(null);
+  function rememberSel() { const el = captionRef.current; if (el) selRef.current = el.selectionStart; }
+  useLayoutEffect(() => {
+    if (pendingCursor.current != null && captionRef.current) {
+      const c = pendingCursor.current; pendingCursor.current = null;
+      try { captionRef.current.setSelectionRange(c, c); } catch {}
+      selRef.current = c;
+    }
+  }, [form.caption]);
+
   function upd(k,v) { setForm(f=>({...f,[k]:v})); }
-  function updSlot(i,tag) { setForm(f=>{ const s=[...f.hashtagSlots]; s[i]=tag; return {...f, hashtagSlots:s}; }); }
+  const captionTags = extractHashtags(form.caption);
+  // Cells show only tags still present in the caption (deleting one by hand empties its cell)
+  const shownSlots = cellTags.map(t => (t && textHasHashtag(form.caption, t)) ? t : null);
+
+  function pickForCell(i, tag) {
+    const prev = cellTags[i];
+    let text = form.caption;
+    if (!tag) { // cleared: remove what this cell had inserted
+      if (prev) { const r = cutHashtagFromText(text, prev); if (r) { text = r.text; pendingCursor.current = r.cursor; } }
+      setCellTags(c => { const n=[...c]; n[i]=null; return n; });
+      setForm(f => ({ ...f, caption:text }));
+      return;
+    }
+    if (prev && prev.toLowerCase() === tag.toLowerCase() && textHasHashtag(text, tag)) return;
+    // already in the caption (typed by hand or from another cell)? don't duplicate it
+    if (textHasHashtag(text, tag)) {
+      if (prev) { const r = cutHashtagFromText(text, prev); if (r) { text = r.text; pendingCursor.current = r.cursor; } }
+    } else if (prev && textHasHashtag(text, prev)) {
+      const r = replaceHashtagInText(text, prev, tag);
+      text = r.text; pendingCursor.current = r.cursor;
+    } else {
+      const r = insertHashtagInText(text, tag, selRef.current);
+      text = r.text; pendingCursor.current = r.cursor;
+    }
+    setCellTags(c => { const n=[...c]; n[i]=tag; return n; });
+    setForm(f => ({ ...f, caption:text }));
+  }
   async function save() {
     const cl = clients.find(c=>c.id===form.clientId);
-    const hashtagsStr = form.hashtagSlots.filter(Boolean).join(" ");
+    const hashtagsStr = captionTags.join(" ");
     if (form.caption)  addMemory("captions", form.caption);
     if (hashtagsStr)   addMemory("hashtags", hashtagsStr);
     if (form.firstComment) addMemory("firstComments", form.firstComment);
-    const { hashtagSlots, ...rest } = form;
-    await onSave({...rest, hashtags:hashtagsStr, clientName:cl?.name||form.clientName});
+    await onSave({...form, hashtags:hashtagsStr, clientName:cl?.name||form.clientName});
   }
   const sc = STATUS_COLORS[form.status] || STATUS_COLORS["Da Editare"];
   return (
-    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+    // The post panel never closes by clicking outside: only X, Annulla or Salva.
+    <div className="modal-overlay">
       <div className="modal">
         <div style={{ padding:"16px 20px", borderBottom:"1.5px solid var(--border)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div style={{ fontWeight:700, fontSize:"var(--fs)" }}>{post?"Modifica Post":"Nuovo Post"}</div>
@@ -1583,10 +1737,13 @@ function PostModal({ post, defaultDate, defaultClientId, defaultClientName, clie
               </select>
             </MField>
           </div>
-          <MField label="Caption"><textarea className="input" value={form.caption} onChange={e=>upd("caption",e.target.value)} placeholder="Testo del post..." style={{minHeight:70,resize:"vertical"}}/></MField>
-          <HashtagCellsEditor slots={form.hashtagSlots} onChange={updSlot} clientId={form.clientId} posts={posts}/>
-          <MField label="Primo Commento"><textarea className="input" value={form.firstComment} onChange={e=>upd("firstComment",e.target.value)} placeholder="Testo del primo commento..." style={{minHeight:70,resize:"vertical"}}/></MField>
-          <MField label="Note interne"><textarea className="input" value={form.notes} onChange={e=>upd("notes",e.target.value)} placeholder="Note per il team..." style={{ minHeight:52, resize:"vertical" }}/></MField>
+          <MField label="Caption"><AutoTextarea innerRef={captionRef} value={form.caption} minHeight={70}
+            onChange={e=>{ upd("caption",e.target.value); selRef.current=e.target.selectionStart; }}
+            onSelect={rememberSel} onKeyUp={rememberSel} onClick={rememberSel} onBlur={rememberSel}
+            placeholder="Testo del post..."/></MField>
+          <HashtagCellsEditor slots={shownSlots} onChange={pickForCell} clientId={form.clientId} posts={posts} copyText={captionTags.join(" ")}/>
+          <MField label="Primo Commento"><AutoTextarea value={form.firstComment} minHeight={70} onChange={e=>upd("firstComment",e.target.value)} placeholder="Testo del primo commento..."/></MField>
+          <MField label="Testo Alternativo"><AutoTextarea value={form.notes} minHeight={52} onChange={e=>upd("notes",e.target.value)} placeholder="Testo alternativo..."/></MField>
           <div style={{ display:"flex", gap:8, justifyContent:"space-between", marginTop:2 }}>
             {post && <button className="btn btn-danger btn-sm" onClick={()=>onDelete(post.id)}><Icon name="trash" size={13}/> Elimina</button>}
             <div style={{ display:"flex", gap:8, marginLeft:"auto" }}>
@@ -1768,7 +1925,7 @@ function HashtagSection({ posts, clients, onSavePost, lbl }) {
       )}
 
       {deleting && (
-        <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&!busy&&setDeleting(null)}>
+        <div className="modal-overlay" {...overlayClose(()=>{ if(!busy) setDeleting(null); })}>
           <div className="modal" style={{ maxWidth:420 }}>
             <div style={{ padding:"16px 20px", borderBottom:"1.5px solid var(--border)" }}>
               <div style={{ fontWeight:700, fontSize:"var(--fs)" }}>Eliminare {deleting}?</div>
@@ -1861,7 +2018,7 @@ function ClientsSection({ clients, onSaveClient, onDeleteClient, posts, lbl }) {
       {(newClient||editing) && <ClientModal client={editing} onSave={save} onClose={()=>{setEditing(null);setNewClient(false);}}/>}
 
       {viewPosts && (
-        <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&setViewPosts(null)}>
+        <div className="modal-overlay" {...overlayClose(()=>setViewPosts(null))}>
           <div className="modal">
             <div style={{padding:"16px 20px",borderBottom:"1.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
@@ -1900,7 +2057,7 @@ function ClientModal({ client, onSave, onClose }) {
   function upd(k,v) { setForm(f=>({...f,[k]:v})); }
   function toggleDay(d) { setForm(f=>({...f,scheduleDays:f.scheduleDays?.includes(d)?f.scheduleDays.filter(x=>x!==d):[...(f.scheduleDays||[]),d]})); }
   return (
-    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <div className="modal-overlay" {...overlayClose(onClose)}>
       <div className="modal">
         <div style={{ padding:"16px 20px", borderBottom:"1.5px solid var(--border)", display:"flex", justifyContent:"space-between" }}>
           <div style={{ fontWeight:700, fontSize:"var(--fs)" }}>{client?"Modifica Cliente":"Nuovo Cliente"}</div>
@@ -2519,7 +2676,7 @@ function FinanceForm({ type, item, clients, finMemDoc, addFinMemory, categoriesI
   const titles = { transaction:"Transazione", invoice:"Fattura", canone:"Canone Ricorrente" };
 
   return (
-    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <div className="modal-overlay" {...overlayClose(onClose)}>
       <div className="modal" style={{maxWidth:520}}>
         <div style={{padding:"16px 20px",borderBottom:"1.5px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{fontWeight:700,fontSize:"var(--fs)"}}>{isEdit?"Modifica":"Nuova"} {titles[type]}</div>
