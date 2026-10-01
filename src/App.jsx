@@ -296,8 +296,12 @@ function buildCSS(fontFamily, fontSize) {
     .post-row { display: flex; align-items: center; gap: 12px; padding: calc(var(--fs) * .78) calc(var(--fs) * .8); border-radius: var(--radius2); background: transparent; border: none; transition: var(--transition); cursor: pointer; }
     .post-row:hover { background: var(--surface2); }
 
+    .modal .input, .modal select, .modal textarea { min-width: 0; max-width: 100%; }
+    .post-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .post-grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    @media (max-width: 480px) { .post-grid3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .post-grid3 > :first-child { grid-column: 1 / -1; } }
     .modal-overlay { position: fixed; inset: 0; background: rgba(20,20,30,.28); backdrop-filter: blur(6px); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
-    .modal { background: var(--surface); border-radius: 24px; border: none; box-shadow: var(--shadow2); width: 100%; max-width: 640px; max-height: 92vh; overflow-y: auto; animation: slideUp .22s cubic-bezier(.4,0,.2,1); }
+    .modal { background: var(--surface); border-radius: 24px; border: none; box-shadow: var(--shadow2); width: 100%; max-width: 640px; max-height: 92vh; overflow-y: auto; overflow-x: hidden; animation: slideUp .22s cubic-bezier(.4,0,.2,1); }
     @keyframes slideUp { from { opacity:0; transform: translateY(14px); } to { opacity:1; transform: translateY(0); } }
 
     .cal-cell { background: var(--surface); min-height: 96px; padding: 6px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); cursor: pointer; transition: background .12s; }
@@ -1561,13 +1565,13 @@ function HashtagCellsEditor({ slots, onChange, clientId, posts, copyText }) {
   return (
     <div className="field">
       <label className="label">Hashtag (fino a 5)</label>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:6 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,minmax(0,1fr))", gap:6, position:"relative" }}>
         {slots.map((slotTag, i) => {
           const isOpen = openCell === i;
           // Options for this cell: all client hashtags not chosen in OTHER cells
           const options = allForClient.filter(t => t.tag === slotTag || !chosen.has(t.tag));
           return (
-            <div key={i} style={{ position:"relative" }}>
+            <div key={i} style={{ minWidth:0 }}>
               <div onClick={e=>{ e.stopPropagation(); setOpenCell(isOpen?null:i); }}
                 title={slotTag||""}
                 style={{ display:"flex", alignItems:"center", gap:4, padding:"7px 8px", borderRadius:"var(--radius2)",
@@ -1587,8 +1591,9 @@ function HashtagCellsEditor({ slots, onChange, clientId, posts, copyText }) {
               </div>
               {isOpen && (
                 <div onClick={e=>e.stopPropagation()}
-                  style={{ position:"absolute", top:"100%", left:0, zIndex:500, marginTop:4,
-                    minWidth:"max(100%, 220px)", width:"max-content", maxWidth:320,
+                  style={{ position:"absolute", top:"100%", zIndex:500, marginTop:4,
+                    ...(i < 3 ? { left:0 } : { right:0 }),
+                    width:"min(100%, 340px)",
                     background:"var(--surface)", border:"1.5px solid var(--border)", borderRadius:10,
                     boxShadow:"var(--shadow2)", maxHeight:260, overflowY:"auto", animation:"fadeIn .1s ease" }}>
                   {slotTag && (
@@ -1715,7 +1720,7 @@ function PostModal({ post, defaultDate, defaultClientId, defaultClientName, clie
           <button className="btn btn-ghost btn-icon" onClick={onClose}><Icon name="x" size={14}/></button>
         </div>
         <div style={{ padding:20, display:"flex", flexDirection:"column", gap:14 }}>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+          <div className="post-grid2">
             <MField label="Titolo"><input className="input" value={form.title} onChange={e=>upd("title",e.target.value)} placeholder="Titolo del post"/></MField>
             <MField label="Cliente">
               <select className="input" value={form.clientId} onChange={e=>{const cl=clients.find(c=>c.id===e.target.value);upd("clientId",e.target.value);upd("clientName",cl?.name||"");}}>
@@ -1724,7 +1729,7 @@ function PostModal({ post, defaultDate, defaultClientId, defaultClientName, clie
               </select>
             </MField>
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+          <div className="post-grid3">
             <MField label="Data"><input className="input" type="date" value={form.date} onChange={e=>upd("date",e.target.value)}/></MField>
             <MField label="Piattaforma">
               <select className="input" value={form.platform} onChange={e=>upd("platform",e.target.value)}>
@@ -1744,7 +1749,7 @@ function PostModal({ post, defaultDate, defaultClientId, defaultClientName, clie
           <HashtagCellsEditor slots={shownSlots} onChange={pickForCell} clientId={form.clientId} posts={posts} copyText={captionTags.join(" ")}/>
           <MField label="Primo Commento"><AutoTextarea value={form.firstComment} minHeight={70} onChange={e=>upd("firstComment",e.target.value)} placeholder="Testo del primo commento..."/></MField>
           <MField label="Testo Alternativo"><AutoTextarea value={form.notes} minHeight={52} onChange={e=>upd("notes",e.target.value)} placeholder="Testo alternativo..."/></MField>
-          <div style={{ display:"flex", gap:8, justifyContent:"space-between", marginTop:2 }}>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:8, justifyContent:"space-between", marginTop:2 }}>
             {post && <button className="btn btn-danger btn-sm" onClick={()=>onDelete(post.id)}><Icon name="trash" size={13}/> Elimina</button>}
             <div style={{ display:"flex", gap:8, marginLeft:"auto" }}>
               <button className="btn btn-ghost" onClick={onClose}>Annulla</button>
@@ -2762,7 +2767,7 @@ function FinanceForm({ type, item, clients, finMemDoc, addFinMemory, categoriesI
           </div>
 
           {/* Importo + Data / Scadenza */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12}}>
             <div className="field">
               <label className="label">Importo (€)</label>
               <input className="input" type="number" min="0" step="0.01" value={form.amount}
@@ -2847,7 +2852,7 @@ function FinanceForm({ type, item, clients, finMemDoc, addFinMemory, categoriesI
 
           {/* IVA — solo fatture */}
           {type==="invoice" && (
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12}}>
               <div className="field">
                 <label className="label">IVA %</label>
                 <select className="input" value={form.vat} onChange={e=>upd("vat",e.target.value)}>
