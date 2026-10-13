@@ -1364,7 +1364,6 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
 
 /* ─── MOBILE CALENDAR ────────────────────────────────────────────────────── */
 function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBorderColor, onSlotClick, onClientSlotClick, onPostClick, scrollRef, onScroll, onUserScroll }) {
-  const [expanded, setExpanded] = useState({});
 
   const PMAP = {
     "Instagram": {bg:"#f3e5ff", stroke:"#9c27b0"},
@@ -1451,8 +1450,6 @@ function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBo
         const dayNum=d.getDate();
         const isWeekend=d.getDay()===0||d.getDay()===6;
         const showSep=d.getDate()===1||i===0;
-        const isExpanded=expanded[ds];
-        const extraCount=dayPosts.length-1;
 
         const DayCell=(
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
@@ -1506,29 +1503,13 @@ function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBo
 
             {/* First post */}
             {dayPosts.length>0&&(
-              <div style={{display:"flex",borderBottom:dayPosts.length>1&&!isExpanded?"1px solid var(--border)":"none",
+              <div style={{display:"flex",borderBottom:"none",
                 background:isToday?"var(--accentbg)":isWeekend?"var(--surface2)":"var(--surface)",alignItems:"stretch"}}>
                 {DayCell}
                 <div style={{flex:1,minWidth:0}}>
                   <PostCard p={dayPosts[0]} isToday={isToday}/>
-                  {/* "+N more" button */}
-                  {dayPosts.length>1&&!isExpanded&&(
-                    <div onClick={e=>{e.stopPropagation();setExpanded(x=>({...x,[ds]:true}));}}
-                      style={{padding:"4px 8px 5px",display:"flex",alignItems:"center",gap:5,cursor:"pointer",borderBottom:"1px solid var(--border)"}}>
-                      <span style={{fontSize:9,background:"var(--surface2)",color:"var(--text2)",padding:"1px 7px",borderRadius:99,border:"0.5px solid var(--border2)",fontWeight:600}}>
-                        +{extraCount} {extraCount===1?"altro post":"altri post"}
-                      </span>
-                      <span style={{fontSize:9,color:"var(--text3)"}}>— tocca per vedere</span>
-                    </div>
-                  )}
-                  {/* Extra posts when expanded */}
-                  {isExpanded&&dayPosts.slice(1).map(p=><PostCard key={p.id} p={p} isToday={isToday}/>)}
-                  {isExpanded&&(
-                    <div onClick={e=>{e.stopPropagation();setExpanded(x=>({...x,[ds]:false}));}}
-                      style={{padding:"4px 8px 5px",display:"flex",alignItems:"center",cursor:"pointer",borderBottom:"1px solid var(--border)"}}>
-                      <span style={{fontSize:9,color:"var(--text3)"}}>▲ riduci</span>
-                    </div>
-                  )}
+                  {/* Tutti gli altri post del giorno, sempre visibili */}
+                  {dayPosts.slice(1).map(p=><PostCard key={p.id} p={p} isToday={isToday}/>)}
                 </div>
               </div>
             )}
@@ -2340,8 +2321,20 @@ function FinanceSection({ clients, finance, saveFinanceDoc, deleteFinanceDoc, fi
   const entrateInc    = filteredTxns.filter(t => t.direction==="in" && t.collectStatus!=="da_incassare").reduce((s,t) => s+(parseFloat(t.amount)||0), 0);
   const entrateAttesa = filteredTxns.filter(t => t.direction==="in" && t.collectStatus==="da_incassare").reduce((s,t) => s+(parseFloat(t.amount)||0), 0);
   const uscite        = filteredTxns.filter(t => t.direction==="out").reduce((s,t) => s+(parseFloat(t.amount)||0), 0);
-  const daIncassare = invoices.filter(i => i.state === "Inviata").reduce((s,i) => s + (parseFloat(i.amount)||0), 0);
-  const scadute    = invoices.filter(i => i.state === "Scaduta").reduce((s,i) => s + (parseFloat(i.amount)||0), 0);
+  // Vecchie fatture non ancora pagate (Inviata / Scaduta): contano come "da incassare"
+  const fattureAperte  = invoices.filter(i => i.state === "Inviata" || i.state === "Scaduta");
+  const fattureAperteTot = fattureAperte.reduce((s,i) => s + (parseFloat(i.amount)||0), 0);
+  const daIncassareTot = entrateAttesa + fattureAperteTot;
+  // Elenco unico di tutto ciò che resta da incassare (transazioni + vecchie fatture)
+  const todayStr = today();
+  const pendingList = [
+    ...txns.filter(t => t.direction==="in" && t.collectStatus==="da_incassare").map(t => ({
+      id:t.id, clientId:t.clientId, title:t.description||"—", amount:t.amount,
+      num:t.invoiceNumber||"", due:t.invoiceDue||"", overdue:!!t.invoiceDue && t.invoiceDue < todayStr })),
+    ...fattureAperte.map(i => ({
+      id:i.id, clientId:i.clientId, title:i.description||clientName(i.clientId), amount:i.amount,
+      num:i.invoiceNumber||"", due:i.dueDate||"", overdue:i.state==="Scaduta" || (!!i.dueDate && i.dueDate < todayStr) })),
+  ].sort((a,b)=>(a.due||"9999").localeCompare(b.due||"9999"));
   const totCanoni  = canoni.reduce((s,c) => s + (parseFloat(c.amount)||0), 0);
 
   function fmt(n) { return "€ " + Number(n).toLocaleString("it-IT", {minimumFractionDigits:0, maximumFractionDigits:2}); }
@@ -2401,12 +2394,10 @@ function FinanceSection({ clients, finance, saveFinanceDoc, deleteFinanceDoc, fi
       {/* KPI */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:22}}>
         {[
-          { label:"Incassato",    val:entrateInc,    color:"var(--accent)",  icon:"arrowUp"   },
-          { label:"Da incassare",  val:entrateAttesa, color:"#d97706",        icon:"clock"     },
-          { label:"Uscite",        val:uscite,        color:"var(--danger)",  icon:"arrowDown" },
-          { label:"Margine netto",                    val:entrateInc-uscite, color:"#185FA5",  icon:"trendUp"   },
-          { label:"Da incassare",                     val:daIncassare, color:"var(--warn)",    icon:"receipt"   },
-          { label:"Fatture scadute",                  val:scadute,     color:"var(--danger)",  icon:"receipt"   },
+          { label:"Incasso Totale",        val:entrateInc,      color:"var(--accent)",  icon:"arrowUp"   },
+          { label:"Da incassare",          val:daIncassareTot,  color:"#d97706",        icon:"clock"     },
+          { label:"Uscite",                val:uscite,          color:"var(--danger)",  icon:"arrowDown" },
+          { label:"In Cassa Attualmente",  val:entrateInc-uscite, color:"#185FA5",      icon:"trendUp"   },
           { label:"Canoni mensili",                   val:totCanoni,   color:"#6366f1",        icon:"repeat"    },
         ].map((k,i) => (
           <div key={i} className="stat-card" style={{cursor:"default",padding:"14px 16px"}}>
@@ -2483,24 +2474,22 @@ function FinanceSection({ clients, finance, saveFinanceDoc, deleteFinanceDoc, fi
               {txns.length===0&&<div className="empty-state" style={{padding:24}}><p>Nessuna transazione</p></div>}
             </div>
 
-            {/* Fatture in scadenza */}
+            {/* Da incassare (transazioni + vecchie fatture) */}
             <div className="card" style={{padding:0,overflow:"hidden"}}>
-              <div style={{padding:"11px 16px",background:"var(--surface2)",borderBottom:"1.5px solid var(--border)",fontWeight:600,fontSize:"var(--fs)"}}>Fatture da gestire</div>
-              {invoices.filter(i=>i.state!=="Pagata").sort((a,b)=>a.dueDate?.localeCompare(b.dueDate)).slice(0,4).map(i=>{
-                const ic=INV_COLORS[i.state]||INV_COLORS["Bozza"];
-                return(
-                  <div key={i.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderBottom:"1px solid var(--border)"}}>
-                    <div style={{width:8,height:8,borderRadius:"50%",background:clientColor(i.clientId),flexShrink:0}}/>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:"var(--fs-sm)",fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{i.description||clientName(i.clientId)}</div>
-                      <div style={{fontSize:"var(--fs-xs)",color:i.state==="Scaduta"?"var(--danger)":"var(--text3)"}}>Scad. {i.dueDate||"—"}</div>
+              <div style={{padding:"11px 16px",background:"var(--surface2)",borderBottom:"1.5px solid var(--border)",fontWeight:600,fontSize:"var(--fs)"}}>Da incassare</div>
+              {pendingList.slice(0,5).map(i=>(
+                <div key={i.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderBottom:"1px solid var(--border)"}}>
+                  <div style={{width:8,height:8,borderRadius:"50%",background:clientColor(i.clientId),flexShrink:0}}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:"var(--fs-sm)",fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{i.title}</div>
+                    <div style={{fontSize:"var(--fs-xs)",color:i.overdue?"var(--danger)":"var(--text3)"}}>
+                      {i.num?`Fatt. ${i.num} · `:""}{i.due?`Scad. ${fmtDate(i.due)}`:"Nessuna scadenza"}{i.overdue?" · scaduta":""}
                     </div>
-                    <span style={{fontWeight:600,fontSize:"var(--fs-sm)",flexShrink:0}}>{fmt(i.amount)}</span>
-                    <span className="chip" style={{background:ic.bg,color:ic.text,borderColor:"transparent",fontSize:"var(--fs-xs)"}}>{i.state}</span>
                   </div>
-                );
-              })}
-              {invoices.filter(i=>i.state!=="Pagata").length===0&&<div className="empty-state" style={{padding:24}}><p>Tutto a posto</p></div>}
+                  <span style={{fontWeight:600,fontSize:"var(--fs-sm)",flexShrink:0}}>{fmt(i.amount)}</span>
+                </div>
+              ))}
+              {pendingList.length===0&&<div className="empty-state" style={{padding:24}}><p>Niente da incassare</p></div>}
             </div>
           </div>
         </div>
@@ -2529,6 +2518,11 @@ function FinanceSection({ clients, finance, saveFinanceDoc, deleteFinanceDoc, fi
                 <div style={{minWidth:0}}>
                   <div style={{fontSize:"var(--fs-sm)",fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.description||"—"}</div>
                   {t.clientId&&<div style={{fontSize:"var(--fs-xs)",color:clientColor(t.clientId),fontWeight:500}}>{clientName(t.clientId)}</div>}
+                  {t.direction==="in"&&(t.invoiceNumber||t.invoiceDue)&&(
+                    <div style={{fontSize:"var(--fs-xs)",color:(t.collectStatus==="da_incassare"&&t.invoiceDue&&t.invoiceDue<todayStr)?"var(--danger)":"var(--text3)"}}>
+                      {t.invoiceNumber?`Fatt. ${t.invoiceNumber}`:"Fattura"}{t.invoiceDue?` · scad. ${fmtDate(t.invoiceDue)}`:""}{(t.collectStatus==="da_incassare"&&t.invoiceDue&&t.invoiceDue<todayStr)?" · scaduta":""}
+                    </div>
+                  )}
                 </div>
                 <span style={{fontSize:"var(--fs-xs)",color:"var(--text2)"}}>{t.category}{t.payMethod&&t.payMethod!=="altro"?" · "+t.payMethod[0].toUpperCase()+t.payMethod.slice(1):""}</span>
                 <span style={{textAlign:"right",fontWeight:600,fontSize:"var(--fs-sm)",
@@ -2796,6 +2790,20 @@ function FinanceForm({ type, item, clients, finMemDoc, addFinMemory, categoriesI
               </div>
             )}
           </div>
+
+          {/* Fattura — dentro la transazione (solo entrate) */}
+          {type==="transaction" && form.direction==="in" && (
+            <div className="field">
+              <label className="label">Fattura (facoltativo)</label>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12}}>
+                <input className="input" value={form.invoiceNumber||""} placeholder="N° fattura, es. 12/2026"
+                  onChange={e=>upd("invoiceNumber",e.target.value)}/>
+                <input className="input" type="date" value={form.invoiceDue||""} title="Scadenza fattura"
+                  onChange={e=>upd("invoiceDue",e.target.value)}/>
+              </div>
+              <div style={{fontSize:"var(--fs-xs)",color:"var(--text3)",marginTop:5}}>Il secondo campo è la data di scadenza della fattura.</div>
+            </div>
+          )}
 
           {/* Categoria — solo transazioni */}
           {type==="transaction" && (
