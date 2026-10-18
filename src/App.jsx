@@ -1059,14 +1059,17 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
     const rowBg=isToday?"var(--accentbg)":isWeekend?"var(--surface2)":"var(--surface)";
     const dayCellBg=isToday?"#CFEBDD":isWeekend?"var(--surface3)":"var(--surface2)";
 
-    const DayCell = ({ transparent }) => (
+    // `small` = data ripetuta (righe dopo la prima dello stesso giorno): più piccola
+    const DayCell = ({ small }) => (
       <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
         gap:1, padding:"4px 2px", borderRight:"1px solid var(--border)", width:50, flexShrink:0,
-        background: transparent ? dayCellBg : dayCellBg, opacity: transparent ? 0 : 1 }}>
-        <div style={{fontSize:"var(--fs-xs)",fontWeight:600,color:isToday?"var(--accent)":"var(--text3)",letterSpacing:".04em"}}>{dow}</div>
+        background: dayCellBg }}>
+        <div style={{fontSize:small?"calc(var(--fs-xs) * .64)":"var(--fs-xs)",fontWeight:600,color:isToday?"var(--accent)":"var(--text3)",letterSpacing:".04em"}}>{dow}</div>
         {isToday
-          ? <div style={{width:24,height:24,background:"var(--accent)",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:"var(--fs-xs)",fontWeight:700}}>{dayNum}</div>
-          : <div style={{fontSize:"var(--fs-lg)",fontWeight:isWeekend?400:500,color:isWeekend?"var(--text3)":"var(--text)",lineHeight:1.2}}>{dayNum}</div>}
+          ? <div style={small
+              ? {width:16,height:16,background:"var(--accent)",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:9,fontWeight:700}
+              : {width:24,height:24,background:"var(--accent)",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:"var(--fs-xs)",fontWeight:700}}>{dayNum}</div>
+          : <div style={{fontSize:small?"calc(var(--fs-lg) * .62)":"var(--fs-lg)",fontWeight:isWeekend?400:500,color:isWeekend?"var(--text3)":"var(--text)",lineHeight:1.2}}>{dayNum}</div>}
       </div>
     );
 
@@ -1087,7 +1090,7 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
           <div key={`slot_${c.id}`}
             style={{display:"grid",gridTemplateColumns:COLS,borderBottom:"0.5px solid var(--border)",minHeight:38,background:rowBg,cursor:"pointer",alignItems:"stretch"}}
             onClick={()=>setNewPostData({date:dateStr,clientId:c.id,clientName:c.name})}>
-            <DayCell/>
+            <DayCell small={i>0}/>
             {/* Slot tratteggiato — span colonne cliente+titolo */}
             <div style={{gridColumn:showTitle?"2/4":"2/3",borderRight:"1px solid var(--border)",padding:0,display:"flex",alignItems:"stretch"}}>
               <div style={{flex:1,borderLeft:`2px dashed ${c.color}`,background:c.color+"08",
@@ -1111,7 +1114,7 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
                 borderBottom:i===dayPosts.length-1?"1px solid var(--border)":"0.5px solid var(--border)",
                 minHeight:44,background:rowBg,alignItems:"stretch"}}>
 
-              <DayCell/>
+              <DayCell small={slots.length>0||i>0}/>
 
               {/* Cliente — bordo sinistro colore stato, nome colore cliente */}
               <div style={{borderRight:"1px solid var(--border)",padding:0,cursor:"pointer",overflow:"hidden"}}
@@ -1451,16 +1454,18 @@ function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBo
         const isWeekend=d.getDay()===0||d.getDay()===6;
         const showSep=d.getDate()===1||i===0;
 
-        const DayCell=(
+        // `small` = data ripetuta (righe dopo la prima dello stesso giorno)
+        const dayCell=(small)=>(
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
             gap:1,padding:"4px 2px",borderRight:"1px solid var(--border)",width:44,flexShrink:0,
             background:isToday?"#CFEBDD":isWeekend?"var(--surface3)":"var(--surface2)"}}>
-            <div style={{fontSize:8,fontWeight:600,color:isToday?"var(--accent)":"var(--text3)",letterSpacing:".04em"}}>{dow}</div>
+            <div style={{fontSize:small?6.5:8,fontWeight:600,color:isToday?"var(--accent)":"var(--text3)",letterSpacing:".04em"}}>{dow}</div>
             {isToday
-              ? <div style={{width:22,height:22,background:"var(--accent)",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:11,fontWeight:700}}>{dayNum}</div>
-              : <div style={{fontSize:13,fontWeight:isWeekend?400:500,color:isWeekend?"var(--text3)":"var(--text)",lineHeight:1.2}}>{dayNum}</div>}
+              ? <div style={{width:small?15:22,height:small?15:22,background:"var(--accent)",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:small?8.5:11,fontWeight:700}}>{dayNum}</div>
+              : <div style={{fontSize:small?8.5:13,fontWeight:isWeekend?400:500,color:isWeekend?"var(--text3)":"var(--text)",lineHeight:1.2}}>{dayNum}</div>}
           </div>
         );
+        const DayCell=dayCell(false);
 
         return (
           <div key={ds} data-today={isToday||undefined}>
@@ -1490,7 +1495,7 @@ function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBo
                 background:isToday?"var(--accentbg)":isWeekend?"var(--surface2)":"var(--surface)",
                 cursor:"pointer",alignItems:"stretch"}}
                 onClick={()=>onClientSlotClick(ds,c)}>
-                {DayCell}
+                {dayCell(si>0)}
                 <div style={{flex:1,display:"flex",alignItems:"center",padding:"0 8px"}}>
                   <div style={{borderLeft:`2px dashed ${c.color}`,background:c.color+"08",flex:1,
                     display:"flex",alignItems:"center",gap:7,padding:"6px 8px",borderRadius:"0 4px 4px 0"}}>
@@ -1502,10 +1507,10 @@ function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBo
             ))}
 
             {/* Ogni post del giorno ha la sua data ripetuta a sinistra */}
-            {dayPosts.map(p=>(
+            {dayPosts.map((p,pi)=>(
               <div key={p.id} style={{display:"flex",borderBottom:"none",
                 background:isToday?"var(--accentbg)":isWeekend?"var(--surface2)":"var(--surface)",alignItems:"stretch"}}>
-                {DayCell}
+                {dayCell(slots.length>0||pi>0)}
                 <div style={{flex:1,minWidth:0}}>
                   <PostCard p={p} isToday={isToday}/>
                 </div>
