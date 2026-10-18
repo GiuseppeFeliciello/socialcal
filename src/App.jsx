@@ -1087,16 +1087,16 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
           <div key={`slot_${c.id}`}
             style={{display:"grid",gridTemplateColumns:COLS,borderBottom:"0.5px solid var(--border)",minHeight:38,background:rowBg,cursor:"pointer",alignItems:"stretch"}}
             onClick={()=>setNewPostData({date:dateStr,clientId:c.id,clientName:c.name})}>
-            {i===0 && dayPosts.length===0 ? <DayCell/> : <div style={{width:50,borderRight:"1px solid var(--border)",background:dayCellBg}}/>}
+            <DayCell/>
             {/* Slot tratteggiato — span colonne cliente+titolo */}
-            <div style={{gridColumn:"2/4",borderRight:"1px solid var(--border)",padding:0,display:"flex",alignItems:"stretch"}}>
+            <div style={{gridColumn:showTitle?"2/4":"2/3",borderRight:"1px solid var(--border)",padding:0,display:"flex",alignItems:"stretch"}}>
               <div style={{flex:1,borderLeft:`2px dashed ${c.color}`,background:c.color+"08",
                 display:"flex",alignItems:"center",padding:"0 10px",gap:8}}>
                 <span style={{fontSize:"var(--fs-xs)",fontWeight:600,color:c.color,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.name}</span>
                 <span style={{fontSize:"var(--fs-xs)",color:c.color+"88",fontWeight:400,flexShrink:0}}>+ aggiungi post</span>
               </div>
             </div>
-            <div style={{display:"contents"}}>{["","",""].map((_,j)=><div key={j} style={{borderRight:j<2?"1px solid var(--border)":"none",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:"var(--fs-xs)",color:"var(--text3)",opacity:.4}}>—</span></div>)}</div>
+            <div style={{display:"contents"}}>{Array.from({length:showSocial?4:1}).map((_,j,arr)=><div key={j} style={{borderRight:j<arr.length-1?"1px solid var(--border)":"none",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:"var(--fs-xs)",color:"var(--text3)",opacity:.4}}>—</span></div>)}</div>
           </div>
         ))}
 
@@ -1111,7 +1111,7 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
                 borderBottom:i===dayPosts.length-1?"1px solid var(--border)":"0.5px solid var(--border)",
                 minHeight:44,background:rowBg,alignItems:"stretch"}}>
 
-              {slots.length===0&&i===0 ? <DayCell/> : <div style={{width:50,flexShrink:0,borderRight:"1px solid var(--border)",background:dayCellBg, opacity:i===0?1:0}}><DayCell transparent={i>0}/></div>}
+              <DayCell/>
 
               {/* Cliente — bordo sinistro colore stato, nome colore cliente */}
               <div style={{borderRight:"1px solid var(--border)",padding:0,cursor:"pointer",overflow:"hidden"}}
@@ -1490,7 +1490,7 @@ function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBo
                 background:isToday?"var(--accentbg)":isWeekend?"var(--surface2)":"var(--surface)",
                 cursor:"pointer",alignItems:"stretch"}}
                 onClick={()=>onClientSlotClick(ds,c)}>
-                {si===0&&dayPosts.length===0?DayCell:<div style={{width:44,flexShrink:0,borderRight:"1px solid var(--border)",background:isToday?"#CFEBDD":isWeekend?"var(--surface3)":"var(--surface2)"}}/>}
+                {DayCell}
                 <div style={{flex:1,display:"flex",alignItems:"center",padding:"0 8px"}}>
                   <div style={{borderLeft:`2px dashed ${c.color}`,background:c.color+"08",flex:1,
                     display:"flex",alignItems:"center",gap:7,padding:"6px 8px",borderRadius:"0 4px 4px 0"}}>
@@ -1501,18 +1501,16 @@ function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBo
               </div>
             ))}
 
-            {/* First post */}
-            {dayPosts.length>0&&(
-              <div style={{display:"flex",borderBottom:"none",
+            {/* Ogni post del giorno ha la sua data ripetuta a sinistra */}
+            {dayPosts.map(p=>(
+              <div key={p.id} style={{display:"flex",borderBottom:"none",
                 background:isToday?"var(--accentbg)":isWeekend?"var(--surface2)":"var(--surface)",alignItems:"stretch"}}>
                 {DayCell}
                 <div style={{flex:1,minWidth:0}}>
-                  <PostCard p={dayPosts[0]} isToday={isToday}/>
-                  {/* Tutti gli altri post del giorno, sempre visibili */}
-                  {dayPosts.slice(1).map(p=><PostCard key={p.id} p={p} isToday={isToday}/>)}
+                  <PostCard p={p} isToday={isToday}/>
                 </div>
               </div>
-            )}
+            ))}
           </div>
         );
       })}
