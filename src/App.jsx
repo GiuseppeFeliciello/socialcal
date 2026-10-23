@@ -296,6 +296,20 @@ function buildCSS(fontFamily, fontSize) {
     .post-row { display: flex; align-items: center; gap: 12px; padding: calc(var(--fs) * .78) calc(var(--fs) * .8); border-radius: var(--radius2); background: transparent; border: none; transition: var(--transition); cursor: pointer; }
     .post-row:hover { background: var(--surface2); }
 
+    .dash-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+    @media (max-width: 768px) { .dash-two { grid-template-columns: minmax(0, 1fr); } }
+    .rw-row { display: grid; grid-template-columns: 130px 1fr 190px; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); }
+    .rw-card { display: flex; gap: 22px; align-items: center; padding: 14px 16px; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); }
+    .rw-card .rw-left { display: flex; gap: 14px; align-items: center; width: 290px; flex-shrink: 0; }
+    .rw-card .rw-strip { flex: 1; min-width: 0; }
+    .rw-cells { display: grid; grid-template-columns: repeat(30, minmax(0, 1fr)); gap: 3px; }
+    @media (max-width: 768px) {
+      .rw-row { grid-template-columns: minmax(0,1fr) auto; row-gap: 6px; }
+      .rw-row .rw-track { grid-column: 1 / -1; order: 3; }
+      .rw-card { flex-direction: column; align-items: stretch; gap: 12px; }
+      .rw-card .rw-left { width: auto; }
+      .rw-cells { grid-template-columns: repeat(15, minmax(0, 1fr)); gap: 4px; }
+    }
     .modal .input, .modal select, .modal textarea { min-width: 0; max-width: 100%; }
     .post-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .post-grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
@@ -378,6 +392,7 @@ export default function App() {
   const [fontId,      setFontId]      = useLS("scm_font",    "poppins");
   const [fontSizeId,  setFontSizeId]  = useLS("scm_fsize",   "lg");
   const [section, setSection] = useState("dashboard");
+  const [calFocus, setCalFocus] = useState(null); // {date, postId?} — dal Dashboard al Calendario
 
   // Loading state
   const loading = !usersCol.ready || !clientsCol.ready || !postsCol.ready;
@@ -483,7 +498,7 @@ export default function App() {
         </div>
         <nav style={{ flex:1, display:"flex", flexDirection:"column", gap:6 }}>
           {nav.map(n => (
-            <button key={n.id} className={"nav-item" + (section===n.id ? " active" : "")} onClick={() => setSection(n.id)}>
+            <button key={n.id} className={"nav-item" + (section===n.id ? " active" : "")} onClick={() => { setCalFocus(null); setSection(n.id); }}>
               <Icon name={n.icon} size={15} color={section===n.id ? "var(--accent)" : "var(--text3)"} />
               <span>{n.label}</span>
             </button>
@@ -507,8 +522,9 @@ export default function App() {
 
       <main className="main-content" style={{ flex:1, overflowY:"auto", background:"var(--bg)", position:"relative" }}>
         {section==="dashboard" && <Dashboard posts={posts} clients={clients}
-          onDeletePost={deletePost} onSavePost={savePost} lbl={lbl} />}
-        {section==="calendar"  && <CalendarView posts={posts} clients={clients}
+          onDeletePost={deletePost} onSavePost={savePost} lbl={lbl}
+          onOpenCalendar={f => { setCalFocus(f); setSection("calendar"); }} />}
+        {section==="calendar"  && <CalendarView focus={calFocus} posts={posts} clients={clients}
           onSavePost={savePost} onDeletePost={deletePost} lbl={lbl} memory={memoryDoc} addMemory={addMemory} />}
         {section==="posts"     && <PostsSection posts={posts} clients={clients}
           onSavePost={savePost} onDeletePost={deletePost} lbl={lbl} memory={memoryDoc} addMemory={addMemory} user={user} />}
@@ -530,7 +546,7 @@ export default function App() {
         boxShadow:"0 8px 28px rgba(20,20,30,.14)", display:"flex", gap:2
       }}>
         {nav.map(n => (
-          <button key={n.id} onClick={()=>setSection(n.id)}
+          <button key={n.id} onClick={()=>{ setCalFocus(null); setSection(n.id); }}
             style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center",
               padding:"11px 4px", border:"none", cursor:"pointer", borderRadius:"var(--pill)",
               background: section===n.id ? "var(--accent)" : "transparent",
@@ -612,7 +628,196 @@ function Login({ users, onLogin }) {
 }
 
 /* ─── DASHBOARD ──────────────────────────────────────────────────────────── */
-function Dashboard({ posts, clients, onDeletePost, onSavePost, lbl }) {
+/* ─── AUTONOMIA CONTENUTI (quanto durano i contenuti per cliente) ─────────── */
+const SHORT_DAYS_IT   = ["dom","lun","mar","mer","gio","ven","sab"];
+const SHORT_MONTHS_IT = ["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","dic"];
+function dayDiff(a, b) { return Math.round((new Date(a+"T00:00:00") - new Date(b+"T00:00:00")) / 86400000); }
+function addDaysISO(ds, n) { const d = new Date(ds+"T00:00:00"); d.setDate(d.getDate()+n); return isoDate(d.getFullYear(), d.getMonth(), d.getDate()); }
+function fmtShortDate(ds) { const d = new Date(ds+"T00:00:00"); return `${SHORT_DAYS_IT[d.getDay()]} ${d.getDate()} ${SHORT_MONTHS_IT[d.getMonth()]}`; }
+const RUNWAY_COLORS = {
+  red:    { bar:"#E5484D", bg:"#FCE4E5", text:"#9B1C22", label:"Muoviti ora" },
+  yellow: { bar:"#E8A317", bg:"#FCEFD5", text:"#7A4B05", label:"Pensaci presto" },
+  green:  { bar:"#1F9D6B", bg:"#DCF1E7", text:"#14633F", label:"Tutto ok" },
+};
+
+// Per un cliente: quanti giorni di contenuti restano (fino all'ultimo post in programma),
+// quando iniziare a scrivere, buchi nei giorni di pubblicazione e post ancora da girare.
+function computeRunway(client, posts) {
+  const t = today();
+  const lead = parseInt(client.leadDays) > 0 ? parseInt(client.leadDays) : 15;
+  const future = posts.filter(p => p.clientId===client.id && p.date && p.date >= t)
+                      .sort((a,b) => a.date.localeCompare(b.date));
+  const last = future.length ? future[future.length-1].date : null;
+  const remaining = last ? dayDiff(last, t) : 0;
+  const level = remaining <= lead ? "red" : remaining <= lead + 15 ? "yellow" : "green";
+  const startBy = last ? addDaysISO(last, -lead) : t;
+  const lateDays = Math.max(0, dayDiff(t, startBy));
+  const toShoot = future.filter(p => p.status === "Da Girare");
+  const sched = client.scheduleDays || [];
+  const byDate = {};
+  future.forEach(p => { (byDate[p.date] = byDate[p.date] || []).push(p); });
+  // buchi = giorni di pubblicazione senza post PRIMA dell'ultimo post in programma
+  let holes = 0;
+  for (let i = 0; i < remaining; i++) {
+    const ds = addDaysISO(t, i);
+    if (sched.includes(new Date(ds+"T00:00:00").getDay()) && !byDate[ds]) holes++;
+  }
+  const cells = [];
+  for (let i = 0; i < 30; i++) {
+    const ds = addDaysISO(t, i);
+    const dow = new Date(ds+"T00:00:00").getDay();
+    const ps = byDate[ds] || [];
+    let kind = "none";
+    if (ps.length) kind = ps.some(p => p.status === "Da Girare") ? "shoot" : "post";
+    else if (sched.includes(dow)) kind = (last && ds < last) ? "hole" : "free";
+    cells.push({ ds, day: new Date(ds+"T00:00:00").getDate(), kind, posts: ps, isToday: i === 0 });
+  }
+  return { lead, last, remaining, level, startBy, lateDays, toShoot, holes, cells };
+}
+
+function RunwayStrip({ client, r, onOpenCalendar }) {
+  const col = client.color || "#6366f1";
+  return (
+    <div>
+      <div className="rw-cells">
+        {r.cells.map(c => {
+          let st = { height:28, borderRadius:6, display:"flex", alignItems:"center", justifyContent:"center",
+            fontSize:9.5, fontWeight:600, userSelect:"none", position:"relative" };
+          if (c.kind === "post")  st = { ...st, background:col, color:"#fff", cursor:"pointer" };
+          if (c.kind === "shoot") st = { ...st, background:`repeating-linear-gradient(135deg, ${col} 0 4px, ${col}66 4px 8px)`, color:"#fff", cursor:"pointer", textShadow:"0 0 3px rgba(0,0,0,.55)" };
+          if (c.kind === "hole")  st = { ...st, border:"1.5px dashed var(--danger)", background:"var(--dangerbg)", color:"var(--danger)", cursor:"pointer" };
+          if (c.kind === "free")  st = { ...st, border:"1.5px dashed #C7CBD3", background:"var(--surface)", color:"var(--text3)", cursor:"pointer" };
+          if (c.kind === "none")  st = { ...st, background:"var(--surface2)", color:"var(--text3)" };
+          if (c.isToday) st = { ...st, boxShadow:"0 0 0 2px var(--text)" };
+          const clickable = c.kind !== "none";
+          const title = `${fmtShortDate(c.ds)}` + (c.posts.length
+            ? " — " + c.posts.map(p => `${p.title||"Post"} (${p.status})`).join(", ")
+            : c.kind === "hole" ? " — giorno di pubblicazione senza post"
+            : c.kind === "free" ? " — giorno previsto, ancora libero" : "");
+          return (
+            <div key={c.ds} style={st} title={title}
+              onClick={clickable ? () => onOpenCalendar && onOpenCalendar({ date:c.ds, postId:c.posts[0]?.id }) : undefined}>
+              {c.day}
+              {c.posts.length > 1 && <span style={{ position:"absolute", top:-4, right:-3, background:"var(--text)", color:"#fff", borderRadius:99, fontSize:8, padding:"0 4px", lineHeight:"12px" }}>{c.posts.length}</span>}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display:"flex", flexWrap:"wrap", gap:"4px 14px", fontSize:10.5, color:"var(--text3)", marginTop:7 }}>
+        <span><span style={{ display:"inline-block", width:12, height:9, borderRadius:3, background:col, marginRight:5 }}/>post in calendario</span>
+        <span><span style={{ display:"inline-block", width:12, height:9, borderRadius:3, background:`repeating-linear-gradient(135deg, ${col} 0 3px, ${col}66 3px 6px)`, marginRight:5 }}/>da girare</span>
+        <span><span style={{ display:"inline-block", width:12, height:9, borderRadius:3, border:"1.5px dashed var(--danger)", background:"var(--dangerbg)", marginRight:5, verticalAlign:"-1px" }}/>buco</span>
+        <span><span style={{ display:"inline-block", width:12, height:9, borderRadius:3, border:"1.5px dashed #C7CBD3", marginRight:5, verticalAlign:"-1px" }}/>giorno previsto libero</span>
+      </div>
+    </div>
+  );
+}
+
+function AutonomyBlock({ posts, clients, onOpenCalendar }) {
+  if (!clients || clients.length === 0) return null;
+  const rows = clients.map(c => ({ c, r: computeRunway(c, posts) })).sort((a,b) => a.r.remaining - b.r.remaining);
+  const reds = rows.filter(x => x.r.level === "red");
+  const worst = reds[0];
+  function whenText(r) {
+    if (!r.last) return "non hai nessun contenuto in programma";
+    if (r.remaining === 0) return "i contenuti finiscono oggi";
+    if (r.remaining === 1) return "i contenuti finiscono domani";
+    return `i contenuti finiscono tra ${r.remaining} giorni`;
+  }
+  function startText(r) {
+    if (!r.last) return "Inizia subito a scrivere e girare";
+    if (r.lateDays > 0) return `Dovevi iniziare a scrivere ${r.lateDays} ${r.lateDays===1?"giorno":"giorni"} fa`;
+    return `Inizia a scrivere entro ${fmtShortDate(r.startBy)}`;
+  }
+  return (
+    <div style={{ marginBottom:26 }}>
+      <div style={{ fontWeight:700, fontSize:"var(--fs-lg)", marginBottom:4 }}>Autonomia contenuti</div>
+      <div style={{ fontSize:"var(--fs-xs)", color:"var(--text3)", marginBottom:14 }}>Quanti giorni di contenuti hai ancora in calendario, cliente per cliente.</div>
+
+      {worst && (
+        <div style={{ background:"var(--dangerbg)", borderRadius:"var(--radius)", padding:"14px 18px", display:"flex", alignItems:"center", gap:14, marginBottom:14 }}>
+          <div style={{ width:34, height:34, borderRadius:"50%", background:"var(--danger)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, flexShrink:0 }}>!</div>
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontWeight:700, color:"#9B1C22", fontSize:"var(--fs-sm)" }}>{worst.c.name}: {whenText(worst.r)}</div>
+            <div style={{ fontSize:"var(--fs-xs)", color:"var(--text2)" }}>
+              {startText(worst.r)}{reds.length > 1 ? ` · e altri ${reds.length-1} ${reds.length-1===1?"cliente":"clienti"} in rosso` : ""}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* A — barre di autonomia */}
+      <div className="card" style={{ padding:"8px 20px 12px", marginBottom:14 }}>
+        {rows.map(({ c, r }) => {
+          const col = RUNWAY_COLORS[r.level];
+          const scale = r.lead + 30;
+          return (
+            <div key={c.id} className="rw-row">
+              <div style={{ fontSize:"var(--fs-sm)", fontWeight:600, display:"flex", alignItems:"center", minWidth:0 }}>
+                <i style={{ display:"inline-block", width:9, height:9, borderRadius:"50%", background:c.color, marginRight:8, flexShrink:0 }}/>
+                <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.name}</span>
+              </div>
+              <div className="rw-track" style={{ height:14, background:"var(--surface3)", borderRadius:99, position:"relative" }}
+                title={`Devi iniziare quando restano ${r.lead} giorni`}>
+                <div style={{ height:"100%", width:Math.max(r.remaining ? Math.min(r.remaining/scale,1)*100 : 0, r.remaining ? 2 : 0)+"%", background:col.bar, borderRadius:99 }}/>
+                <div style={{ position:"absolute", top:-4, bottom:-4, left:(r.lead/scale*100)+"%", borderLeft:"2px dashed var(--text3)" }}>
+                  <span style={{ position:"absolute", top:-14, left:-12, fontSize:9, color:"var(--text3)", whiteSpace:"nowrap" }}>{r.lead}g</span>
+                </div>
+              </div>
+              <div style={{ textAlign:"right" }}>
+                <div style={{ fontWeight:700, fontSize:"var(--fs-sm)", color:col.bar }}>{r.last ? `${r.remaining} ${r.remaining===1?"giorno":"giorni"}` : "nessun contenuto"}</div>
+                <div style={{ fontSize:10.5, color:"var(--text3)" }}>{r.last ? `fino a ${fmtShortDate(r.last)}` : "in programma"}</div>
+                {(r.holes > 0 || r.toShoot.length > 0) && (
+                  <div style={{ fontSize:10.5, marginTop:2, display:"flex", gap:8, justifyContent:"flex-end", flexWrap:"wrap" }}>
+                    {r.toShoot.length > 0 && <span style={{ color:"#7A4B05", background:"#FCEFD5", borderRadius:99, padding:"0 7px", fontWeight:600 }}>{r.toShoot.length} da girare</span>}
+                    {r.holes > 0 && <span style={{ color:"var(--danger)", fontWeight:600 }}>{r.holes} {r.holes===1?"buco":"buchi"}</span>}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        <div style={{ fontSize:10.5, color:"var(--text3)", marginTop:8 }}>La linea tratteggiata è il tuo anticipo: sotto quella linea è ora di scrivere e girare.</div>
+      </div>
+
+      {/* C + B — una carta per cliente con "quando iniziare" e la striscia dei 30 giorni */}
+      <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+        {rows.map(({ c, r }) => {
+          const col = RUNWAY_COLORS[r.level];
+          const pct = Math.min(r.remaining / (r.lead + 30), 1) * 100;
+          return (
+            <div key={c.id} className="rw-card">
+              <div className="rw-left">
+                <div style={{ width:76, height:76, borderRadius:"50%", background:`conic-gradient(${col.bar} ${pct}%, var(--surface3) 0)`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                  <div style={{ width:58, height:58, borderRadius:"50%", background:"var(--surface)", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", lineHeight:1 }}>
+                    <b style={{ fontSize:20 }}>{r.remaining}</b>
+                    <small style={{ fontSize:9, color:"var(--text3)" }}>{r.remaining===1?"giorno":"giorni"}</small>
+                  </div>
+                </div>
+                <div style={{ minWidth:0 }}>
+                  <div style={{ fontWeight:600, fontSize:"var(--fs-sm)", display:"flex", alignItems:"center", marginBottom:5 }}>
+                    <i style={{ display:"inline-block", width:9, height:9, borderRadius:"50%", background:c.color, marginRight:8, flexShrink:0 }}/>
+                    <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.name}</span>
+                  </div>
+                  <span className="chip" style={{ background:col.bg, color:col.text, borderColor:"transparent", fontSize:11, fontWeight:600 }}>{col.label}</span>
+                  <div style={{ fontSize:"var(--fs-xs)", color:"var(--text2)", marginTop:6 }}>{startText(r)}</div>
+                  {r.toShoot.length > 0 && (
+                    <div style={{ fontSize:"var(--fs-xs)", color:"#7A4B05", marginTop:3, fontWeight:600 }}>
+                      {r.toShoot.length} post ancora da girare · il primo per {fmtShortDate(r.toShoot[0].date)}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="rw-strip"><RunwayStrip client={c} r={r} onOpenCalendar={onOpenCalendar}/></div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function Dashboard({ posts, clients, onDeletePost, onSavePost, lbl, onOpenCalendar }) {
   const now = new Date();
   const mk  = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
   const thisMonth  = posts.filter(p => p.date?.startsWith(mk));
@@ -652,6 +857,8 @@ function Dashboard({ posts, clients, onDeletePost, onSavePost, lbl }) {
         ))}
       </div>
 
+      <AutonomyBlock posts={posts} clients={clients} onOpenCalendar={onOpenCalendar}/>
+
       {filtered && (
         <div className="card" style={{ padding:20, marginBottom:22 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:13 }}>
@@ -667,7 +874,7 @@ function Dashboard({ posts, clients, onDeletePost, onSavePost, lbl }) {
         </div>
       )}
 
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
+      <div className="dash-two">
         <div className="card" style={{ padding:20 }}>
           <div style={{ fontWeight:600, fontSize:"var(--fs)", marginBottom:13 }}>Stato Post</div>
           <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
@@ -741,7 +948,7 @@ function useWindowWidth() {
   return w;
 }
 
-function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, addMemory }) {
+function CalendarView({ focus, posts, clients, onSavePost, onDeletePost, lbl, memory, addMemory }) {
   const winW = useWindowWidth();
   const [view,        setView]        = useState("vertical");
   const [year,        setYear]        = useState(new Date().getFullYear());
@@ -757,8 +964,17 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
   const prevScrollHeightRef = useRef({ desktop: 0, mobile: 0 });
   const anchoredRef = useRef(true);            // true until the person scrolls by hand
   const releaseAnchor = () => { anchoredRef.current = false; };
-  const [pastDays, setPastDays] = useState(14);
-  const [futureDays, setFutureDays] = useState(90);
+  // Se arrivo dal Dashboard (clic su un quadratino) il calendario si apre su quel giorno/post
+  const focusDiff = focus?.date ? Math.round((new Date(focus.date+"T00:00:00") - new Date(today()+"T00:00:00"))/86400000) : 0;
+  const [pastDays, setPastDays] = useState(Math.max(14, -focusDiff + 30));
+  const [futureDays, setFutureDays] = useState(Math.max(90, focusDiff + 30));
+  const anchorSelRef = useRef(focus?.date ? `[data-date="${focus.date}"]` : "[data-today]");
+  const [hl, setHl] = useState(focus?.date ? { date: focus.date, postId: focus.postId || null } : null);
+  useEffect(() => {
+    if (!hl) return;
+    const t = setTimeout(() => setHl(null), 4500);
+    return () => clearTimeout(t);
+  }, []);
 
   // FIX: scroll to today inside the correct scrollable container instead of
   // calling scrollIntoView on the document (that only ever worked by luck on
@@ -772,7 +988,7 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
   // reached even on desktop. This retries every frame for up to ~2s.
   function scrollToTodayIn(container, attempt = 0) {
     if (!container || container.clientHeight === 0) return; // hidden (other layout)
-    const target = container.querySelector("[data-today]");
+    const target = container.querySelector(anchorSelRef.current);
     if (!target) {
       if (attempt < 120) requestAnimationFrame(() => scrollToTodayIn(container, attempt + 1));
       return;
@@ -807,7 +1023,7 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
     if (!anchoredRef.current) return;
     for (const c of [desktopScrollRef.current, mobileScrollRef.current]) {
       if (!c || c.clientHeight === 0) continue;
-      const t = c.querySelector("[data-today]");
+      const t = c.querySelector(anchorSelRef.current);
       if (!t) continue;
       c.scrollTop += t.getBoundingClientRect().top - c.getBoundingClientRect().top - c.clientHeight / 3;
     }
@@ -859,6 +1075,8 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
     const n=new Date(); setYear(n.getFullYear()); setMonth(n.getMonth());
     const w=new Date(); w.setDate(w.getDate()-w.getDay()); setWeekStart(w);   // week view too
     anchoredRef.current = true;
+    anchorSelRef.current = "[data-today]";
+    setHl(null);
     requestAnimationFrame(() => {
       scrollToTodayIn(desktopScrollRef.current);
       scrollToTodayIn(mobileScrollRef.current);
@@ -1112,7 +1330,8 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
             <div key={p.id}
               style={{display:"grid",gridTemplateColumns:COLS,
                 borderBottom:i===dayPosts.length-1?"1px solid var(--border)":"0.5px solid var(--border)",
-                minHeight:44,background:rowBg,alignItems:"stretch"}}>
+                minHeight:44,background:rowBg,alignItems:"stretch",
+                ...(hl&&hl.postId===p.id?{outline:"2px solid var(--accent)",outlineOffset:-2,position:"relative",zIndex:1}:{})}}>
 
               <DayCell small={slots.length>0||i>0}/>
 
@@ -1273,7 +1492,8 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
             {vertDays.map((ds,i)=>{
               const d=new Date(ds+"T00:00:00"), showSep=d.getDate()===1||i===0;
               return (
-                <div key={ds} data-today={ds===today()||undefined}>
+                <div key={ds} data-today={ds===today()||undefined} data-date={ds}
+                  style={hl&&hl.date===ds&&!hl.postId?{outline:"2px solid var(--accent)",outlineOffset:-2,position:"relative",zIndex:1}:undefined}>
                   {showSep&&(
                     <div style={{padding:"5px 12px",fontSize:"var(--fs-xs)",fontWeight:700,
                       color:"var(--text3)",letterSpacing:".06em",textTransform:"uppercase",
@@ -1359,14 +1579,14 @@ function CalendarView({ posts, clients, onSavePost, onDeletePost, lbl, memory, a
           onPostClick={p=>setEditPost(p)}
           scrollRef={mobileScrollRef}
           onScroll={e=>handleScroll(e.currentTarget,"mobile")}
-          onUserScroll={releaseAnchor}/>
+          onUserScroll={releaseAnchor} highlight={hl}/>
       </div>
     </div>
   );
 }
 
 /* ─── MOBILE CALENDAR ────────────────────────────────────────────────────── */
-function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBorderColor, onSlotClick, onClientSlotClick, onPostClick, scrollRef, onScroll, onUserScroll }) {
+function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBorderColor, onSlotClick, onClientSlotClick, onPostClick, scrollRef, onScroll, onUserScroll, highlight }) {
 
   const PMAP = {
     "Instagram": {bg:"#f3e5ff", stroke:"#9c27b0"},
@@ -1403,7 +1623,8 @@ function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBo
     return (
       <div onClick={()=>onPostClick(p)}
         style={{padding:"6px 8px",display:"flex",flexDirection:"column",gap:3,cursor:"pointer",
-          borderBottom:"0.5px solid var(--border)"}}>
+          borderBottom:"0.5px solid var(--border)",
+          ...(highlight&&highlight.postId===p.id?{outline:"2px solid var(--accent)",outlineOffset:-2,position:"relative",zIndex:1}:{})}}>
         <div style={{display:"flex",alignItems:"center",gap:5}}>
           <div style={{width:3,height:28,borderRadius:2,background:bColor,flexShrink:0}}/>
           <div style={{flex:1,minWidth:0}}>
@@ -1468,7 +1689,8 @@ function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBo
         const DayCell=dayCell(false);
 
         return (
-          <div key={ds} data-today={isToday||undefined}>
+          <div key={ds} data-today={isToday||undefined} data-date={ds}
+            style={highlight&&highlight.date===ds&&!highlight.postId?{outline:"2px solid var(--accent)",outlineOffset:-2,position:"relative",zIndex:1}:undefined}>
             {showSep&&(
               <div style={{display:"flex",background:"var(--surface2)",borderBottom:"1px solid var(--border)"}}>
                 <div style={{width:44,borderRight:"1px solid var(--border)",flexShrink:0}}/>
@@ -2072,10 +2294,19 @@ function ClientModal({ client, onSave, onClose }) {
               ))}
             </div>
           </MField>
+          <MField label="Giorni di anticipo per scrivere i contenuti">
+            <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+              <input className="input" type="number" min="1" max="90" value={form.leadDays ?? 15}
+                onChange={e=>upd("leadDays", e.target.value)} style={{ width:90, flex:"none" }}/>
+              <span style={{ fontSize:"var(--fs-xs)", color:"var(--text2)", flex:1, minWidth:180 }}>
+                Quanti giorni prima della fine dei contenuti in programma devi iniziare a scrivere e girare (se non lo imposti: 15).
+              </span>
+            </div>
+          </MField>
           <MField label="Note"><textarea className="input" value={form.notes} onChange={e=>upd("notes",e.target.value)} placeholder="Note sul cliente…" style={{ minHeight:52, resize:"vertical" }}/></MField>
           <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
             <button className="btn btn-ghost" onClick={onClose}>Annulla</button>
-            <button className="btn btn-primary" onClick={()=>onSave(form.id?form:{...form,id:genId()})} disabled={!form.name}><Icon name="check" size={14}/> Salva</button>
+            <button className="btn btn-primary" onClick={()=>{ const lead=parseInt(form.leadDays); onSave({...form, leadDays: lead>0?Math.min(lead,90):15, id: form.id||genId()}); }} disabled={!form.name}><Icon name="check" size={14}/> Salva</button>
           </div>
         </div>
       </div>
