@@ -1851,7 +1851,7 @@ function PostModal({ post, defaultDate, defaultClientId, defaultClientName, clie
     const base = post || {
       title:"", clientId:defaultClientId||"", clientName:defaultClientName||"",
       platform:"Tutte", date:defaultDate||today(), status:"Da Editare",
-      caption:"", hashtags:"", firstComment:"", notes:"",
+      caption:"", hashtags:"", coverTitles:"", firstComment:"", notes:"",
       igStatus:"—", fbStatus:"—", ttStatus:"—"
     };
     // Old posts: hashtags that lived only in the old separate field are
@@ -1953,6 +1953,7 @@ function PostModal({ post, defaultDate, defaultClientId, defaultClientName, clie
             onSelect={rememberSel} onKeyUp={rememberSel} onClick={rememberSel} onBlur={rememberSel}
             placeholder="Testo del post..."/></MField>
           <HashtagCellsEditor slots={shownSlots} onChange={pickForCell} clientId={form.clientId} posts={posts} copyText={captionTags.join(" ")}/>
+          <MField label="Titoli Copertina"><AutoTextarea value={form.coverTitles||""} minHeight={52} onChange={e=>upd("coverTitles",e.target.value)} placeholder={"Scrivi le alternative, una per riga..."}/></MField>
           <MField label="Primo Commento"><AutoTextarea value={form.firstComment} minHeight={70} onChange={e=>upd("firstComment",e.target.value)} placeholder="Testo del primo commento..."/></MField>
           <MField label="Testo Alternativo"><AutoTextarea value={form.notes} minHeight={52} onChange={e=>upd("notes",e.target.value)} placeholder="Testo alternativo..."/></MField>
           <div style={{ display:"flex", flexWrap:"wrap", gap:8, justifyContent:"space-between", marginTop:2 }}>
