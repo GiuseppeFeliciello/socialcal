@@ -27,6 +27,7 @@ const Icon = ({ name, size = 16, color = "currentColor" }) => {
     lock: <><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></>,
     user: <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
     type: <><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></>,
+    download: <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>,
     sliders: <><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></>,
     tag: <><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></>,
     hash: <><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></>,
@@ -218,6 +219,42 @@ function overlayClose(fn) {
   };
 }
 
+// ── Risultati (insight) di un post pubblicato ─────────────────────────────
+// Campi: [chiave, etichetta, tipo]  tipo: "int" (numero intero) | "sec" (secondi) | "pct" (0-100)
+const INS_MAIN = [
+  ["views","Visualizzazioni","int"], ["reach","Account raggiunti","int"],
+  ["avgWatch","Tempo medio di visualizzazione (sec)","sec"], ["duration","Durata del reel (sec)","sec"],
+  ["saves","Salvataggi","int"], ["shares","Condivisioni (invii)","int"],
+  ["comments","Commenti","int"], ["follows","Nuovi follower dal reel","int"],
+  ["nonFollowerPct","Visualizzazioni da non follower (%)","pct"], ["dms","DM ricevuti (parola chiave)","int"],
+];
+const INS_CURVE = [
+  ["ret3","Ancora a guardare dopo 3 sec (%)","pct"], ["retMid","Ancora a guardare a metà reel (%)","pct"],
+  ["retEnd","Ancora a guardare alla fine (%)","pct"],
+];
+function cleanInsInput(raw, type) {
+  let v = String(raw ?? "");
+  if (type === "int") return v.replace(/\D/g, "");
+  v = v.replace(",", ".").replace(/[^0-9.]/g, "");
+  const i = v.indexOf(".");
+  if (i >= 0) v = v.slice(0, i + 1) + v.slice(i + 1).replace(/\./g, "");
+  if (type === "pct" && v !== "" && parseFloat(v) > 100) v = "100";
+  return v;
+}
+// Converte in numeri al salvataggio; restituisce null se non c'è nessun dato.
+function finalizeIns(ins, prevReadAt) {
+  const out = {};
+  for (const [k] of [...INS_MAIN, ...INS_CURVE]) {
+    const raw = ins?.[k];
+    if (raw === "" || raw == null) continue;
+    const n = Number(raw);
+    if (Number.isFinite(n)) out[k] = n;
+  }
+  if (!Object.keys(out).length) return null;
+  out.readAt = prevReadAt || today();
+  return out;
+}
+
 // Textarea that grows with its content (paste, typing, reopening a saved post).
 function AutoTextarea({ value, onChange, minHeight = 52, innerRef, ...rest }) {
   const localRef = useRef(null);
@@ -332,6 +369,8 @@ function buildCSS(fontFamily, fontSize) {
 
     .pill-tabs { display: inline-flex; background: var(--surface3); border-radius: var(--pill); padding: 4px; gap: 2px; border: none; }
     .pill-tab { padding: calc(var(--fs-sm) * .55) calc(var(--fs-sm) * 1.15); border-radius: var(--pill); border: none; cursor: pointer; font-size: var(--fs-sm); font-weight: 500; font-family: var(--font); transition: var(--transition); background: transparent; color: var(--text2); }
+    @media (max-width: 768px) { .settings-tabs { max-width: 100%; } .settings-tabs .pill-tab { padding: 8px 10px; } }
+    @media (max-width: 440px) { .settings-tabs .pill-tab svg { display: none; } }
     .pill-tab.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
     .pill-tab:hover:not(.active) { color: var(--text); }
 
@@ -418,6 +457,24 @@ export default function App() {
   }
 
   const finance = financeCol.data || [];
+
+  // Esporta tutti i dati in un solo file (le password degli utenti NON vengono incluse).
+  function buildExport() {
+    const stripUser = ({ password, pw, ...u }) => u;
+    const byDate = (a, b) => String(a.date || "").localeCompare(String(b.date || ""));
+    const out = {
+      app: "SocialCal",
+      exportedAt: new Date().toISOString(),
+      clients: clients,
+      posts: [...posts].sort(byDate),
+      finance: finance,
+      labels: labelsCol.data || [],
+      memory: memoryCol.data || [],
+      users: users.map(stripUser),
+    };
+    out.counts = { clients: out.clients.length, posts: out.posts.length, finance: out.finance.length, users: out.users.length };
+    return out;
+  }
   async function saveFinanceDoc(doc)   { await financeCol.save(doc); }
   async function deleteFinanceDoc(id)  { await financeCol.remove(id); }
 
@@ -535,7 +592,8 @@ export default function App() {
         {section==="settings"  && isAdmin && (
           <Settings users={users} onSaveUser={saveUser} onDeleteUser={deleteUser}
             lbl={lbl} setLbl={setLbl} currentUser={currentUser}
-            fontId={fontId} setFontId={setFontId} fontSizeId={fontSizeId} setFontSizeId={setFontSizeId} />
+            fontId={fontId} setFontId={setFontId} fontSizeId={fontSizeId} setFontSizeId={setFontSizeId}
+            buildExport={buildExport} />
         )}
       </main>
 
@@ -1851,15 +1909,17 @@ function PostModal({ post, defaultDate, defaultClientId, defaultClientName, clie
     const base = post || {
       title:"", clientId:defaultClientId||"", clientName:defaultClientName||"",
       platform:"Tutte", date:defaultDate||today(), status:"Da Editare",
-      caption:"", hashtags:"", coverTitles:"", firstComment:"", notes:"",
+      caption:"", hashtags:"", coverTitles:"", firstComment:"",
       igStatus:"—", fbStatus:"—", ttStatus:"—"
     };
     // Old posts: hashtags that lived only in the old separate field are
     // appended to the caption so nothing is lost.
     let caption = base.caption || "";
+    const insStr = {};
+    for (const [k] of [...INS_MAIN, ...INS_CURVE]) insStr[k] = base.ins?.[k] != null ? String(base.ins[k]) : "";
     const missing = extractHashtags(base.hashtags || "").filter(t => !textHasHashtag(caption, t));
     if (missing.length) caption = caption.trim() ? caption.replace(/\s+$/, "") + "\n\n" + missing.join(" ") : missing.join(" ");
-    return { ...base, caption };
+    return { ...base, caption, ins: insStr };
   });
   // Which hashtag each cell inserted (cell index -> tag). Seeded from the first 5 in the caption.
   const [cellTags, setCellTags] = useState(() => {
@@ -1881,6 +1941,13 @@ function PostModal({ post, defaultDate, defaultClientId, defaultClientName, clie
   }, [form.caption]);
 
   function upd(k,v) { setForm(f=>({...f,[k]:v})); }
+  function updIns(k,type,raw) { setForm(f=>({...f, ins:{...f.ins, [k]:cleanInsInput(raw,type)}})); }
+  const insHasData = Object.values(form.ins || {}).some(v => v !== "");
+  const showInsights = form.status === "Pubblicato" || insHasData;
+  const keepPct = (() => {
+    const a = parseFloat(form.ins?.avgWatch), d = parseFloat(form.ins?.duration);
+    return a > 0 && d > 0 ? Math.min(100, Math.round(a / d * 100)) : null;
+  })();
   const captionTags = extractHashtags(form.caption);
   // Cells show only tags still present in the caption (deleting one by hand empties its cell)
   const shownSlots = cellTags.map(t => (t && textHasHashtag(form.caption, t)) ? t : null);
@@ -1914,7 +1981,11 @@ function PostModal({ post, defaultDate, defaultClientId, defaultClientName, clie
     if (form.caption)  addMemory("captions", form.caption);
     if (hashtagsStr)   addMemory("hashtags", hashtagsStr);
     if (form.firstComment) addMemory("firstComments", form.firstComment);
-    await onSave({...form, hashtags:hashtagsStr, clientName:cl?.name||form.clientName});
+    const { ins: insForm, ...rest } = form;
+    const insFinal = finalizeIns(insForm, post?.ins?.readAt);
+    const toSave = { ...rest, hashtags:hashtagsStr, clientName:cl?.name||form.clientName };
+    if (insFinal) toSave.ins = insFinal;
+    await onSave(toSave);
   }
   const sc = STATUS_COLORS[form.status] || STATUS_COLORS["Da Editare"];
   return (
@@ -1955,7 +2026,47 @@ function PostModal({ post, defaultDate, defaultClientId, defaultClientName, clie
           <HashtagCellsEditor slots={shownSlots} onChange={pickForCell} clientId={form.clientId} posts={posts} copyText={captionTags.join(" ")}/>
           <MField label="Titoli Copertina"><AutoTextarea value={form.coverTitles||""} minHeight={52} onChange={e=>upd("coverTitles",e.target.value)} placeholder={"Scrivi le alternative, una per riga..."}/></MField>
           <MField label="Primo Commento"><AutoTextarea value={form.firstComment} minHeight={70} onChange={e=>upd("firstComment",e.target.value)} placeholder="Testo del primo commento..."/></MField>
-          <MField label="Testo Alternativo"><AutoTextarea value={form.notes} minHeight={52} onChange={e=>upd("notes",e.target.value)} placeholder="Testo alternativo..."/></MField>
+          <div style={{ borderTop:"1.5px solid var(--border)", paddingTop:14, marginTop:4 }}>
+            <div style={{ fontWeight:700, fontSize:"var(--fs)", marginBottom:4 }}>Risultati</div>
+            {!showInsights ? (
+              <div style={{ fontSize:"var(--fs-sm)", color:"var(--text3)", lineHeight:1.45 }}>
+                Compaiono quando lo stato del post è "Pubblicato". Si compilano una volta sola, circa 7 giorni dopo la pubblicazione.
+              </div>
+            ) : (
+              <>
+                <div style={{ fontSize:"var(--fs-xs)", color:"var(--text3)", marginBottom:12, lineHeight:1.45 }}>
+                  Copia i numeri dalle statistiche del reel, circa 7 giorni dopo la pubblicazione. I campi vuoti non contano.
+                </div>
+                <div className="post-grid2" style={{ alignItems:"end" }}>
+                  {INS_MAIN.map(([k,label,type])=>(
+                    <MField key={k} label={label}>
+                      <input className="input" type="text" inputMode={type==="int"?"numeric":"decimal"} autoComplete="off"
+                        value={form.ins?.[k] ?? ""} onChange={e=>updIns(k,type,e.target.value)} placeholder="—"/>
+                    </MField>
+                  ))}
+                </div>
+                {keepPct!==null && (
+                  <div style={{ marginTop:10 }}>
+                    <span className="chip" style={{ background:"var(--accentbg)", color:"var(--accent)", borderColor:"var(--accent)44" }}>
+                      Tenuta media: {keepPct}% del reel
+                    </span>
+                  </div>
+                )}
+                <div style={{ fontWeight:600, fontSize:"var(--fs-sm)", margin:"16px 0 4px" }}>Curva di tenuta (facoltativa)</div>
+                <div style={{ fontSize:"var(--fs-xs)", color:"var(--text3)", marginBottom:10, lineHeight:1.45 }}>
+                  Leggi sul grafico di Instagram quanta gente è ancora lì in tre punti. Sono valori approssimativi: la curva intera mandala in chat.
+                </div>
+                <div className="post-grid2" style={{ alignItems:"end" }}>
+                  {INS_CURVE.map(([k,label,type])=>(
+                    <MField key={k} label={label}>
+                      <input className="input" type="text" inputMode="decimal" autoComplete="off"
+                        value={form.ins?.[k] ?? ""} onChange={e=>updIns(k,type,e.target.value)} placeholder="—"/>
+                    </MField>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
           <div style={{ display:"flex", flexWrap:"wrap", gap:8, justifyContent:"space-between", marginTop:2 }}>
             {post && <button className="btn btn-danger btn-sm" onClick={()=>onDelete(post.id)}><Icon name="trash" size={13}/> Elimina</button>}
             <div style={{ display:"flex", gap:8, marginLeft:"auto" }}>
@@ -2316,7 +2427,7 @@ function ClientModal({ client, onSave, onClose }) {
 }
 
 /* ─── SETTINGS ───────────────────────────────────────────────────────────── */
-function Settings({ users, onSaveUser, onDeleteUser, lbl, setLbl, currentUser, fontId, setFontId, fontSizeId, setFontSizeId }) {
+function Settings({ users, onSaveUser, onDeleteUser, lbl, setLbl, currentUser, fontId, setFontId, fontSizeId, setFontSizeId, buildExport }) {
   const [tab,  setTab]  = useState("users");
   const [form, setForm] = useState({ name:"", email:"", pw:"", role:"editor" });
   const [msg,  setMsg]  = useState("");
@@ -2343,12 +2454,26 @@ function Settings({ users, onSaveUser, onDeleteUser, lbl, setLbl, currentUser, f
     { id:"users",     icon:"users",   label:"Utenti" },
     { id:"labels",    icon:"tag",     label:"Rinomina" },
     { id:"appearance",icon:"type",    label:"Aspetto" },
+    { id:"data",      icon:"download",label:"Dati" },
   ];
+  const [exportInfo, setExportInfo] = useState(null);
+  function doExport() {
+    const data = buildExport();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type:"application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const d = new Date();
+    const stamp = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    a.href = url; a.download = `socialcal-dati-${stamp}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    setExportInfo({ ...data.counts, kb: Math.max(1, Math.round(blob.size/1024)) });
+  }
 
   return (
     <div style={{ padding:"clamp(14px,4vw,32px)", maxWidth:880 }}>
       <h1 className="page-title" style={{ marginBottom:22 }}>Impostazioni</h1>
-      <div className="pill-tabs" style={{ marginBottom:24, display:"inline-flex" }}>
+      <div className="pill-tabs settings-tabs" style={{ marginBottom:24, display:"inline-flex" }}>
         {tabs.map(t=>(
           <button key={t.id} className={"pill-tab"+(tab===t.id?" active":"")} onClick={()=>setTab(t.id)}
             style={{ display:"flex", alignItems:"center", gap:6 }}>
@@ -2421,6 +2546,29 @@ function Settings({ users, onSaveUser, onDeleteUser, lbl, setLbl, currentUser, f
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {tab==="data" && (
+        <div className="card" style={{ padding:22, maxWidth:560 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
+            <Icon name="download" size={16} color="var(--accent)"/>
+            <div style={{ fontWeight:600, fontSize:"var(--fs)" }}>Esporta tutti i dati</div>
+          </div>
+          <p style={{ fontSize:"var(--fs-sm)", color:"var(--text2)", lineHeight:1.5, marginBottom:14 }}>
+            Scarica un solo file con clienti, post, finanze e impostazioni. Serve per analizzare i dati o come copia di sicurezza. Le password degli utenti non vengono incluse.
+          </p>
+          <button className="btn btn-primary" onClick={doExport}><Icon name="download" size={14}/> Esporta dati</button>
+          {exportInfo && (
+            <div style={{ marginTop:14 }}>
+              <Alert type="success">
+                File scaricato: {exportInfo.posts} post, {exportInfo.clients} clienti, {exportInfo.finance} voci finanza ({exportInfo.kb} KB).
+              </Alert>
+            </div>
+          )}
+          <p style={{ fontSize:"var(--fs-xs)", color:"var(--text3)", marginTop:14, lineHeight:1.5 }}>
+            Il file contiene dati dei tuoi clienti: condividilo solo con chi deve vederlo.
+          </p>
         </div>
       )}
 
