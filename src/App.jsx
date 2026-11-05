@@ -386,6 +386,14 @@ function buildCSS(fontFamily, fontSize) {
     .empty-state svg { margin-bottom: 12px; opacity: .4; }
     .empty-state p { font-size: var(--fs); }
 
+    .cal-month { display: grid; grid-template-columns: var(--msw, 30px) minmax(0, 1fr); }
+    #cal-scroll-body-mobile { --msw: 28px; }
+    .cal-mstrip { min-width: 0; }
+    .cal-mlab { position: sticky; top: 6px; writing-mode: vertical-rl; transform: rotate(180deg);
+      text-transform: uppercase; font-weight: 700; font-size: 15px; letter-spacing: .2em; white-space: nowrap;
+      width: 100%; padding: 10px 0; line-height: 1; text-align: left; pointer-events: none; user-select: none; }
+    #cal-scroll-body-mobile .cal-mlab { font-size: 14px; }
+    .cal-mdays { min-width: 0; }
     #cal-scroll-body, #cal-scroll-body-mobile {
       -webkit-overflow-scrolling: touch;
       overscroll-behavior: contain;
@@ -1006,6 +1014,38 @@ function useWindowWidth() {
   return w;
 }
 
+// ── Striscia del mese (calendario Verticale) ────────────────────────────────
+// Colore di fondo e colore della scritta per ogni mese (gen → dic).
+const MONTH_TINTS = [
+  ["#f1e6f5","rgba(130,60,150,.55)"], ["#fbe7ee","rgba(190,40,90,.5)"],  ["#e6f4e1","rgba(60,130,50,.55)"],
+  ["#fbf3d6","rgba(160,120,0,.55)"],  ["#dff3f2","rgba(20,120,120,.55)"], ["#fdebdc","rgba(190,90,20,.55)"],
+  ["#e1effb","rgba(30,100,170,.55)"], ["#fde4e1","rgba(190,60,50,.5)"],  ["#eef2dc","rgba(110,120,30,.6)"],
+  ["#fdf1dc","rgba(176,110,10,.55)"], ["#e2f3ec","rgba(31,122,92,.55)"], ["#e5eafb","rgba(63,81,181,.55)"],
+];
+// Raggruppa i giorni consecutivi dello stesso mese: [{ key:"2026-11", m:10, days:[...] }]
+function groupByMonth(days) {
+  const out = [];
+  for (const ds of days) {
+    const key = ds.slice(0, 7), last = out[out.length - 1];
+    if (last && last.key === key) last.days.push(ds);
+    else out.push({ key, m: Number(ds.slice(5, 7)) - 1, days: [ds] });
+  }
+  return out;
+}
+// Il nome del mese resta fermo sul lato sinistro mentre i giorni scorrono;
+// al cambio mese il nuovo nome spinge via il vecchio (position: sticky).
+function MonthStrip({ m, children }) {
+  const [bg, fg] = MONTH_TINTS[m] || MONTH_TINTS[0];
+  return (
+    <div className="cal-month">
+      <div className="cal-mstrip" style={{ background:bg }}>
+        <div className="cal-mlab" style={{ color:fg }}>{MONTHS_IT[m]}</div>
+      </div>
+      <div className="cal-mdays">{children}</div>
+    </div>
+  );
+}
+
 function CalendarView({ focus, posts, clients, onSavePost, onDeletePost, lbl, memory, addMemory }) {
   const winW = useWindowWidth();
   const [view,        setView]        = useState("vertical");
@@ -1525,7 +1565,7 @@ function CalendarView({ focus, posts, clients, onSavePost, onDeletePost, lbl, me
       {/* VERTICAL */}
       {view==="vertical" && (
         <div className="card" style={{overflow:"visible",padding:0}}>
-          <div id="cal-vert-header" style={{display:"grid",gridTemplateColumns:COLS,background:"var(--surface2)",borderBottom:"1.5px solid var(--border)",borderRadius:"var(--radius) var(--radius) 0 0",overflow:"hidden"}}>
+          <div id="cal-vert-header" style={{display:"grid",gridTemplateColumns:COLS,paddingLeft:30,background:"var(--surface2)",borderBottom:"1.5px solid var(--border)",borderRadius:"var(--radius) var(--radius) 0 0",overflow:"hidden"}}>
             {[
               {label:"Giorno",  center:true,  color:null,      icon:null,          show:true},
               {label:"Cliente", center:false, color:null,      icon:null,          show:true},
@@ -1547,8 +1587,8 @@ function CalendarView({ focus, posts, clients, onSavePost, onDeletePost, lbl, me
             ))}
           </div>
           <div id="cal-scroll-body" ref={desktopScrollRef} onScroll={e=>handleScroll(e.currentTarget,"desktop")} onWheel={releaseAnchor} onTouchStart={releaseAnchor} onPointerDown={releaseAnchor} onKeyDown={releaseAnchor} style={{maxHeight:"calc(100vh - 260px)",overflowY:"auto"}}>
-            {vertDays.map((ds,i)=>{
-              const d=new Date(ds+"T00:00:00"), showSep=d.getDate()===1||i===0;
+            {groupByMonth(vertDays).map(g=>(<MonthStrip key={g.key} m={g.m}>{g.days.map(ds=>{
+              const d=new Date(ds+"T00:00:00"), showSep=d.getDate()===1||ds===vertDays[0];
               return (
                 <div key={ds} data-today={ds===today()||undefined} data-date={ds}
                   style={hl&&hl.date===ds&&!hl.postId?{outline:"2px solid var(--accent)",outlineOffset:-2,position:"relative",zIndex:1}:undefined}>
@@ -1562,7 +1602,7 @@ function CalendarView({ focus, posts, clients, onSavePost, onDeletePost, lbl, me
                   <VertRow dateStr={ds} showTitle={showTitle} showSocial={showSocial}/>
                 </div>
               );
-            })}
+            })}</MonthStrip>))}
           </div>
         </div>
       )}
@@ -1723,7 +1763,7 @@ function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBo
        which can collapse to 0 height and freeze/hide the scroll area. */
     <div id="cal-scroll-body-mobile" ref={scrollRef} onScroll={onScroll} onWheel={onUserScroll} onTouchStart={onUserScroll} onPointerDown={onUserScroll}
       style={{overflowY:"scroll",WebkitOverflowScrolling:"touch",height:"calc(100dvh - 118px - env(safe-area-inset-bottom, 0px))"}}>
-      {vertDays.map((ds,i)=>{
+      {groupByMonth(vertDays).map(g=>(<MonthStrip key={g.key} m={g.m}>{g.days.map(ds=>{
         const d=new Date(ds+"T00:00:00");
         const isToday=ds===today();
         const dayPosts=postsFor(ds);
@@ -1731,7 +1771,7 @@ function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBo
         const dow=DAYS_IT[d.getDay()];
         const dayNum=d.getDate();
         const isWeekend=d.getDay()===0||d.getDay()===6;
-        const showSep=d.getDate()===1||i===0;
+        const showSep=d.getDate()===1||ds===vertDays[0];
 
         // `small` = data ripetuta (righe dopo la prima dello stesso giorno)
         const dayCell=(small)=>(
@@ -1798,7 +1838,7 @@ function MobileCalendar({ posts, clients, vertDays, postsFor, slotsFor, clientBo
             ))}
           </div>
         );
-      })}
+      })}</MonthStrip>))}
     </div>
   );
 }
